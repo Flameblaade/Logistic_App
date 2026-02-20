@@ -5,17 +5,22 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Badge
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.logistic_app.ui.theme.LightGrayBackground
+import com.example.logistic_app.ui.theme.*
 
 @Composable
 fun ProfileScreen() {
@@ -26,70 +31,110 @@ fun ProfileScreen() {
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Card(
+        Spacer(modifier = Modifier.height(24.dp))
+        
+        // Profile Header
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 32.dp),
+                .size(120.dp)
+                .clip(CircleShape)
+                .background(NavyBlue.copy(alpha = 0.1f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                Icons.Default.Person,
+                contentDescription = null,
+                modifier = Modifier.size(64.dp),
+                tint = NavyBlue
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "Juan Dela Cruz",
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Bold,
+            color = TextPrimary
+        )
+        Text(
+            text = "Senior Logistics Driver",
+            fontSize = 14.sp,
+            color = TextSecondary
+        )
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White)
+            colors = CardDefaults.cardColors(containerColor = SurfaceWhite),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
             Column(
-                modifier = Modifier
-                    .padding(24.dp)
-                    .fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally
+                modifier = Modifier.padding(24.dp)
             ) {
-                // Profile Picture Placeholder
-                Box(
-                    modifier = Modifier
-                        .size(120.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFFE0E0E0)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        Icons.Default.Person,
-                        contentDescription = null,
-                        modifier = Modifier.size(64.dp),
-                        tint = Color.Gray
-                    )
-                }
+                Text(
+                    "PERSONAL INFORMATION",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextSecondary,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
 
-                Spacer(modifier = Modifier.height(24.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    ProfileField(label = "Last Name", value = "Dela Cruz", modifier = Modifier.weight(1f))
-                    ProfileField(label = "First Name", value = "Juan", modifier = Modifier.weight(1f))
-                    ProfileField(label = "Middle Name", value = "Gadiano", modifier = Modifier.weight(1f))
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                ProfileField(label = "Code Name", value = "Gwapito", modifier = Modifier.fillMaxWidth())
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                ProfileField(label = "Mobile Number", value = "+639923256691", modifier = Modifier.fillMaxWidth())
+                ProfileInfoRow(icon = Icons.Default.Badge, label = "Code Name", value = "Gwapito")
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color(0xFFF5F5F5))
                 
-                Spacer(modifier = Modifier.height(32.dp))
+                ProfileInfoRow(icon = Icons.Default.Phone, label = "Mobile Number", value = "+63 992 325 6691")
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color(0xFFF5F5F5))
+                
+                ProfileInfoRow(icon = Icons.Default.Email, label = "Email Address", value = "j.delacruz@logistic.gov")
             }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Logout Button
+        OutlinedButton(
+            onClick = { /* TODO */ },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = EmergencyRed),
+            border = androidx.compose.foundation.BorderStroke(1.dp, EmergencyRed.copy(alpha = 0.5f))
+        ) {
+            Icon(Icons.Default.Logout, contentDescription = null)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Logout Session", fontWeight = FontWeight.Bold)
         }
     }
 }
 
 @Composable
-fun ProfileField(label: String, value: String, modifier: Modifier = Modifier) {
-    Column(modifier = modifier.padding(horizontal = 4.dp)) {
-        Text(text = label, fontSize = 12.sp, color = Color.Gray)
-        Text(
-            text = value,
-            fontSize = 16.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(top = 4.dp)
-        )
-        HorizontalDivider(modifier = Modifier.padding(top = 4.dp), thickness = 1.dp, color = Color.Black)
+fun ProfileInfoRow(icon: ImageVector, label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Surface(
+            modifier = Modifier.size(36.dp),
+            shape = RoundedCornerShape(10.dp),
+            color = LightGrayBackground
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp), tint = NavyBlue)
+            }
+        }
+        Spacer(modifier = Modifier.width(16.dp))
+        Column {
+            Text(text = label, fontSize = 12.sp, color = TextSecondary)
+            Text(
+                text = value,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = TextPrimary
+            )
+        }
     }
 }
