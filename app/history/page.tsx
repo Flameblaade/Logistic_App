@@ -46,10 +46,11 @@ export default function HistoryPage() {
         const data = d.data();
         const createdAt = data.createdAt as Timestamp | null;
         const eventMap: Record<string, string> = {
-          Pending: "Pending Dispatch",
-          "In Transit": "In Transit",
-          Completed: "Delivery Completed",
-          Cancelled: "Dispatch Cancelled",
+          Pending: "Pending Approval",
+          Approved: "Approved by Personnel",
+          "En Route": "En Route to Location",
+          Delivered: "Delivered",
+          Completed: "Completed",
         };
         
         return {
@@ -108,11 +109,12 @@ export default function HistoryPage() {
 
   const getEventBadge = (event: string) => {
     switch (event) {
-      case "Delivery Completed": return "bg-emerald-100 text-emerald-800 border border-emerald-200";
-      case "In Transit": return "bg-blue-100 text-blue-800 border border-blue-200";
-      case "Pending Dispatch": return "bg-amber-100 text-amber-800 border border-amber-200";
-      case "Dispatch Cancelled": return "bg-rose-100 text-rose-800 border border-rose-200";
-      case "Update": return "bg-violet-100 text-violet-800 border border-violet-200";
+      case "Pending Approval": return "bg-amber-100 text-amber-800 border border-amber-200";
+      case "Approved by Personnel": return "bg-blue-100 text-blue-800 border border-blue-200";
+      case "En Route to Location": return "bg-violet-100 text-violet-800 border border-violet-200";
+      case "Delivered": return "bg-cyan-100 text-cyan-800 border border-cyan-200";
+      case "Completed": return "bg-emerald-100 text-emerald-800 border border-emerald-200";
+      case "Update": return "bg-slate-100 text-slate-800 border border-slate-200";
       default: return "bg-slate-100 text-slate-800 border border-slate-200";
     }
   };

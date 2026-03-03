@@ -35,7 +35,13 @@ interface Vehicle {
   vehicleType?: string;
   vehicleCondition: string;
   odometer: number;
-  imageUrl?: string;
+  imageUrl?: string; // Keep for backward compatibility
+  images?: {
+    front?: string;
+    back?: string;
+    left?: string;
+    right?: string;
+  };
   unserviceableReasons?: {
     flatTires: boolean;
     engineFailure: boolean;
@@ -96,6 +102,24 @@ export default function VehiclePage() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string>("");
   const [viewMode, setViewMode] = useState<"table" | "card">("card");
+  
+  // Multiple image states
+  const [imageFiles, setImageFiles] = useState<{
+    front: File | null;
+    back: File | null;
+    left: File | null;
+    right: File | null;
+  }>({ front: null, back: null, left: null, right: null });
+  
+  const [imagePreviews, setImagePreviews] = useState<{
+    front: string;
+    back: string;
+    left: string;
+    right: string;
+  }>({ front: "", back: "", left: "", right: "" });
+  
+  // Image enlarge modal
+  const [enlargedImage, setEnlargedImage] = useState<{ url: string; label: string } | null>(null);
 
   const today = new Date().toISOString().split("T")[0];
 
@@ -139,15 +163,32 @@ export default function VehiclePage() {
     }
   }, [user]);
 
-  // Set image preview when editing vehicle with existing image
+  // Set image preview when editing vehicle with existing images
   useEffect(() => {
-    if (editModalOpen && selectedVehicle?.imageUrl) {
-      setImagePreview(selectedVehicle.imageUrl);
+    if (editModalOpen && selectedVehicle) {
+      // Set previews for existing images
+      setImagePreviews({
+        front: selectedVehicle.images?.front || selectedVehicle.imageUrl || "",
+        back: selectedVehicle.images?.back || "",
+        left: selectedVehicle.images?.left || "",
+        right: selectedVehicle.images?.right || ""
+      });
     } else if (!editModalOpen) {
-      setImagePreview("");
-      setImageFile(null);
+      setImagePreviews({ front: "", back: "", left: "", right: "" });
+      setImageFiles({ front: null, back: null, left: null, right: null });
     }
-  }, [editModalOpen, selectedVehicle?.imageUrl]);
+  }, [editModalOpen, selectedVehicle]);
+
+  // Handle ESC key to close enlarged image
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && enlargedImage) {
+        setEnlargedImage(null);
+      }
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [enlargedImage]);
 
   // Proactive Migration: Update existing vehicles that have old types
   useEffect(() => {
@@ -221,25 +262,71 @@ export default function VehiclePage() {
     }
   };
 
+  const handleMultipleImageChange = (e: React.ChangeEvent<HTMLInputElement>, view: 'front' | 'back' | 'left' | 'right') => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validate file type
+      const validTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"];
+      if (!validTypes.includes(file.type)) {
+        setErrorMsg("Invalid file type. Please upload a valid image (JPEG, PNG, GIF, or WebP).");
+        return;
+      }
+      // Validate file size (max 10MB)
+      const maxSize = 10 * 1024 * 1024;
+      if (file.size > maxSize) {
+        setErrorMsg("File size too large. Maximum size is 10MB.");
+        return;
+      }
+      
+      setImageFiles(prev => ({ ...prev, [view]: file }));
+      
+      // Create preview
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreviews(prev => ({ ...prev, [view]: reader.result as string }));
+      };
+      reader.readAsDataURL(file);
+      setErrorMsg("");
+    }
+  };
+
+  const removeMultipleImage = (view: 'front' | 'back' | 'left' | 'right') => {
+    setImageFiles(prev => ({ ...prev, [view]: null }));
+    setImagePreviews(prev => ({ ...prev, [view]: "" }));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
     setErrorMsg("");
 
-    // Upload image if selected
-    let imageUrl = "";
-    if (imageFile) {
-      setUploadingImage(true);
-      try {
-        const uploadResult = await uploadImageToCloudinary(imageFile, "vehicles");
-        imageUrl = uploadResult.secure_url;
-      } catch (error) {
-        console.error("Image upload error:", error);
-        setErrorMsg("Failed to upload image. You can still save without an image.");
-        // Continue without image
-      } finally {
-        setUploadingImage(false);
+    // Upload images if selected
+    const uploadedImages: { front?: string; back?: string; left?: string; right?: string } = {};
+    
+    setUploadingImage(true);
+    try {
+      // Upload each image
+      if (imageFiles.front) {
+        const result = await uploadImageToCloudinary(imageFiles.front, "vehicles/front");
+        uploadedImages.front = result.secure_url;
       }
+      if (imageFiles.back) {
+        const result = await uploadImageToCloudinary(imageFiles.back, "vehicles/back");
+        uploadedImages.back = result.secure_url;
+      }
+      if (imageFiles.left) {
+        const result = await uploadImageToCloudinary(imageFiles.left, "vehicles/left");
+        uploadedImages.left = result.secure_url;
+      }
+      if (imageFiles.right) {
+        const result = await uploadImageToCloudinary(imageFiles.right, "vehicles/right");
+        uploadedImages.right = result.secure_url;
+      }
+    } catch (error) {
+      console.error("Image upload error:", error);
+      setErrorMsg("Failed to upload some images. You can still save without images.");
+    } finally {
+      setUploadingImage(false);
     }
 
     const assignedOfficer = personnels.find(o => o.id === form.personnelId);
@@ -251,7 +338,8 @@ export default function VehiclePage() {
         personnelName,
         dateAdded: today,
         createdAt: Timestamp.now(),
-        imageUrl: imageUrl || "",
+        images: uploadedImages,
+        imageUrl: uploadedImages.front || "", // Keep for backward compatibility
       });
       setSuccessMsg("Vehicle added successfully!");
       setModalOpen(false);
@@ -277,8 +365,8 @@ export default function VehiclePage() {
           othersText: ""
         }
       });
-      setImageFile(null);
-      setImagePreview("");
+      setImageFiles({ front: null, back: null, left: null, right: null });
+      setImagePreviews({ front: "", back: "", left: "", right: "" });
       await fetchVehicles();
       setTimeout(() => setSuccessMsg(""), 3500);
     } catch (err) {
@@ -306,19 +394,32 @@ export default function VehiclePage() {
     setErrorMsg(""); // Clear any previous errors
     
     try {
-      // Upload image if a new image was selected
-      let imageUrl = selectedVehicle.imageUrl || "";
-      if (imageFile) {
-        setUploadingImage(true);
-        try {
-          const uploadResult = await uploadImageToCloudinary(imageFile, "vehicle");
-          imageUrl = uploadResult.secure_url;
-        } catch (error) {
-          console.error("Image upload error:", error);
-          setErrorMsg("Failed to upload image. Saving other changes...");
-        } finally {
-          setUploadingImage(false);
+      // Upload new images if selected
+      const uploadedImages = { ...selectedVehicle.images } || {};
+      
+      setUploadingImage(true);
+      try {
+        if (imageFiles.front) {
+          const result = await uploadImageToCloudinary(imageFiles.front, "vehicles/front");
+          uploadedImages.front = result.secure_url;
         }
+        if (imageFiles.back) {
+          const result = await uploadImageToCloudinary(imageFiles.back, "vehicles/back");
+          uploadedImages.back = result.secure_url;
+        }
+        if (imageFiles.left) {
+          const result = await uploadImageToCloudinary(imageFiles.left, "vehicles/left");
+          uploadedImages.left = result.secure_url;
+        }
+        if (imageFiles.right) {
+          const result = await uploadImageToCloudinary(imageFiles.right, "vehicles/right");
+          uploadedImages.right = result.secure_url;
+        }
+      } catch (error) {
+        console.error("Image upload error:", error);
+        setErrorMsg("Failed to upload some images. Saving other changes...");
+      } finally {
+        setUploadingImage(false);
       }
 
       const vehicleData = {
@@ -337,13 +438,14 @@ export default function VehiclePage() {
         vehicleType: selectedVehicle.vehicleType,
         vehicleCondition: selectedVehicle.vehicleCondition,
         odometer: selectedVehicle.odometer,
-        imageUrl,
+        images: uploadedImages,
+        imageUrl: uploadedImages.front || selectedVehicle.imageUrl || "", // Keep for backward compatibility
       };
       
       await updateDoc(doc(db, "vehicles", selectedVehicle.id), vehicleData);
       
-      // Update the selected vehicle with the new image URL
-      const updatedVehicle = { ...selectedVehicle, imageUrl };
+      // Update the selected vehicle with the new images
+      const updatedVehicle = { ...selectedVehicle, images: uploadedImages, imageUrl: uploadedImages.front || selectedVehicle.imageUrl };
       setSelectedVehicle(updatedVehicle);
       setOriginalVehicle(updatedVehicle);
       
@@ -353,8 +455,8 @@ export default function VehiclePage() {
       await fetchVehicles();
       
       setEditModalOpen(false);
-      setImageFile(null);
-      setImagePreview("");
+      setImageFiles({ front: null, back: null, left: null, right: null });
+      setImagePreviews({ front: "", back: "", left: "", right: "" });
       
       // Reopen details modal to show updated vehicle
       setTimeout(() => {
@@ -634,9 +736,9 @@ export default function VehiclePage() {
 
                       {/* Vehicle Image */}
                       <div className="relative aspect-[4/3] bg-gradient-to-br from-slate-100 to-slate-200 overflow-hidden">
-                        {vehicle.imageUrl ? (
+                        {(vehicle.images?.front || vehicle.imageUrl) ? (
                           <img
-                            src={vehicle.imageUrl}
+                            src={vehicle.images?.front || vehicle.imageUrl}
                             alt={vehicle.codename}
                             className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
                           />
@@ -809,63 +911,67 @@ export default function VehiclePage() {
                 </div>
               )}
 
-              {/* Two-Column Layout: Image Left, Form Right */}
+              {/* Two-Column Layout: Images Left, Form Right */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-                {/* LEFT SIDE - Vehicle Image */}
+                {/* LEFT SIDE - Vehicle Images (4 views) */}
                 <div className="lg:col-span-1">
-                  <div className="sticky top-6 flex flex-col items-center border-2 border-emerald-200 bg-gradient-to-br from-emerald-50/50 to-green-50/30 rounded-2xl p-6">
-                    <label className="block text-sm font-bold text-slate-700 mb-4 uppercase tracking-wide">
-                      Vehicle Image
+                  <div className="sticky top-6 space-y-4">
+                    <label className="block text-sm font-bold text-slate-700 uppercase tracking-wide text-center">
+                      Vehicle Images
                     </label>
-                    {/* Image Preview */}
-                    <div className="mb-4 w-full">
-                      {imagePreview ? (
-                        <div className="relative w-full aspect-square rounded-2xl border-4 border-emerald-300 overflow-hidden shadow-lg">
-                          <img
-                            src={imagePreview}
-                            alt="Preview"
-                            className="w-full h-full object-cover"
+                    
+                    {/* 2x2 Grid of Image Uploads */}
+                    <div className="grid grid-cols-2 gap-3">
+                      {(['front', 'back', 'left', 'right'] as const).map((view) => (
+                        <div key={view} className="border-2 border-emerald-200 bg-gradient-to-br from-emerald-50/50 to-green-50/30 rounded-xl p-3">
+                          <label className="block text-xs font-bold text-slate-600 uppercase mb-2 text-center">
+                            {view}
+                          </label>
+                          {imagePreviews[view] ? (
+                            <div className="relative aspect-square rounded-lg border-2 border-emerald-300 overflow-hidden shadow-md">
+                              <img
+                                src={imagePreviews[view]}
+                                alt={`${view} view`}
+                                className="w-full h-full object-cover"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => removeMultipleImage(view)}
+                                className="absolute top-1 right-1 bg-rose-500 hover:bg-rose-600 text-white rounded-full p-1 transition-colors shadow-lg"
+                              >
+                                <span className="material-symbols-outlined" style={{ fontSize: "0.9rem" }}>close</span>
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="aspect-square rounded-lg border-2 border-dashed border-emerald-300 bg-white flex items-center justify-center">
+                              <span className="material-symbols-outlined text-emerald-300" style={{ fontSize: "2rem" }}>add_photo_alternate</span>
+                            </div>
+                          )}
+                          <input
+                            type="file"
+                            id={`vehicle-image-${view}`}
+                            accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                            onChange={(e) => handleMultipleImageChange(e, view)}
+                            className="hidden"
                           />
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setImageFile(null);
-                              setImagePreview("");
-                            }}
-                            className="absolute top-2 right-2 bg-rose-500 hover:bg-rose-600 text-white rounded-full p-2 transition-colors shadow-lg"
+                          <label
+                            htmlFor={`vehicle-image-${view}`}
+                            className="mt-2 w-full inline-flex items-center justify-center gap-1 cursor-pointer rounded-lg bg-gradient-to-r from-emerald-600 to-green-600 px-3 py-1.5 text-xs font-bold text-white hover:from-emerald-700 hover:to-green-700 transition-all shadow-md"
                           >
-                            <span className="material-symbols-outlined" style={{ fontSize: "1.1rem" }}>close</span>
-                          </button>
+                            <span className="material-symbols-outlined" style={{ fontSize: "0.9rem" }}>upload</span>
+                            Upload
+                          </label>
                         </div>
-                      ) : (
-                        <div className="w-full aspect-square rounded-2xl border-4 border-dashed border-emerald-300 bg-white flex items-center justify-center">
-                          <span className="material-symbols-outlined text-emerald-400" style={{ fontSize: "5rem" }}>local_shipping</span>
-                        </div>
-                      )}
+                      ))}
                     </div>
                     
-                    {/* Upload Button */}
-                    <input
-                      type="file"
-                      id="vehicle-image"
-                      accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
-                      onChange={handleImageChange}
-                      className="hidden"
-                    />
-                    <label
-                      htmlFor="vehicle-image"
-                      className="w-full inline-flex items-center justify-center gap-2 cursor-pointer rounded-xl bg-gradient-to-r from-emerald-600 to-green-600 px-6 py-3 text-sm font-bold text-white hover:from-emerald-700 hover:to-green-700 transition-all shadow-lg shadow-emerald-500/30"
-                    >
-                      <span className="material-symbols-outlined" style={{ fontSize: "1.2rem" }}>upload</span>
-                      Choose Image
-                    </label>
-                    <p className="text-xs text-slate-500 mt-3 text-center">
-                      JPEG, PNG, GIF, WebP<br />Max: 10MB
+                    <p className="text-xs text-slate-500 text-center">
+                      JPEG, PNG, GIF, WebP • Max: 10MB each
                     </p>
                     {uploadingImage && (
-                      <p className="text-xs text-emerald-600 mt-3 flex items-center gap-1 font-semibold">
+                      <p className="text-xs text-emerald-600 flex items-center justify-center gap-1 font-semibold">
                         <span className="material-symbols-outlined animate-spin" style={{ fontSize: "1rem" }}>progress_activity</span>
-                        Uploading...
+                        Uploading images...
                       </p>
                     )}
                   </div>
@@ -1190,25 +1296,48 @@ export default function VehiclePage() {
             </div>
             <div className="p-6 max-h-[75vh] overflow-y-auto">
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* LEFT SIDE - Vehicle Image */}
+                {/* LEFT SIDE - Vehicle Images Gallery */}
                 <div className="lg:col-span-1">
-                  <div className="sticky top-0">
-                    {selectedVehicle.imageUrl ? (
-                      <div className="relative w-full aspect-square rounded-2xl border-4 border-teal-300 overflow-hidden shadow-lg bg-slate-50">
-                        <img
-                          src={selectedVehicle.imageUrl}
-                          alt={`${selectedVehicle.codename}`}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                    ) : (
-                      <div className="relative w-full aspect-square rounded-2xl border-4 border-dashed border-slate-300 overflow-hidden shadow-lg bg-slate-50 flex items-center justify-center">
-                        <div className="text-center">
-                          <span className="material-symbols-outlined text-slate-300" style={{ fontSize: "5rem" }}>local_shipping</span>
-                          <p className="text-sm text-slate-400 mt-2 font-medium">No Image</p>
-                        </div>
-                      </div>
-                    )}
+                  <div className="sticky top-0 space-y-3">
+                    <label className="block text-sm font-bold text-slate-700 uppercase tracking-wide text-center mb-3">
+                      Vehicle Images
+                    </label>
+                    
+                    {/* 2x2 Grid of Images */}
+                    <div className="grid grid-cols-2 gap-3">
+                      {(['front', 'back', 'left', 'right'] as const).map((view) => {
+                        const imageUrl = selectedVehicle.images?.[view] || (view === 'front' ? selectedVehicle.imageUrl : undefined);
+                        return (
+                          <div key={view} className="border-2 border-teal-200 bg-gradient-to-br from-slate-50 via-teal-50/30 to-slate-50 rounded-xl p-2">
+                            <label className="block text-xs font-bold text-slate-600 uppercase mb-1.5 text-center">
+                              {view}
+                            </label>
+                            {imageUrl ? (
+                              <div
+                                onClick={() => setEnlargedImage({ url: imageUrl, label: `${selectedVehicle.codename} - ${view} view` })}
+                                className="relative aspect-square rounded-lg border-2 border-teal-300 overflow-hidden shadow-md cursor-pointer hover:border-teal-500 hover:shadow-lg transition-all group"
+                              >
+                                <img
+                                  src={imageUrl}
+                                  alt={`${view} view`}
+                                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                                />
+                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all flex items-center justify-center">
+                                  <span className="material-symbols-outlined text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" style={{ fontSize: "2rem" }}>
+                                    zoom_in
+                                  </span>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="aspect-square rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 flex items-center justify-center">
+                                <span className="material-symbols-outlined text-slate-300" style={{ fontSize: "2rem" }}>no_photography</span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <p className="text-xs text-slate-500 text-center italic">Click any image to enlarge</p>
                   </div>
                 </div>
 
@@ -1350,64 +1479,65 @@ export default function VehiclePage() {
             <form onSubmit={(e) => { e.preventDefault(); handleSaveChanges(); }} className="overflow-y-auto flex-1">
               <div className="p-6">
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-                  {/* LEFT SIDE - Vehicle Image */}
+                  {/* LEFT SIDE - Vehicle Images (4 views) */}
                   <div className="lg:col-span-1">
-                    <div className="sticky top-0 flex flex-col items-center border-2 border-teal-200 bg-gradient-to-br from-slate-50 via-teal-50/30 to-slate-50 rounded-2xl p-6">
-                      <label className="block text-sm font-bold text-slate-700 mb-4 uppercase tracking-wide">
-                        Vehicle Image
+                    <div className="sticky top-0 space-y-4">
+                      <label className="block text-sm font-bold text-slate-700 uppercase tracking-wide text-center">
+                        Vehicle Images
                       </label>
-                      {/* Image Preview */}
-                      <div className="mb-4 w-full">
-                        {imagePreview ? (
-                          <div className="relative w-full aspect-square rounded-2xl border-4 border-teal-300 overflow-hidden shadow-lg">
-                            <img
-                              src={imagePreview}
-                              alt="Preview"
-                              className="w-full h-full object-cover"
+                      
+                      {/* 2x2 Grid of Image Uploads */}
+                      <div className="grid grid-cols-2 gap-3">
+                        {(['front', 'back', 'left', 'right'] as const).map((view) => (
+                          <div key={view} className="border-2 border-teal-200 bg-gradient-to-br from-slate-50 via-teal-50/30 to-slate-50 rounded-xl p-3">
+                            <label className="block text-xs font-bold text-slate-600 uppercase mb-2 text-center">
+                              {view}
+                            </label>
+                            {imagePreviews[view] ? (
+                              <div className="relative aspect-square rounded-lg border-2 border-teal-300 overflow-hidden shadow-md">
+                                <img
+                                  src={imagePreviews[view]}
+                                  alt={`${view} view`}
+                                  className="w-full h-full object-cover"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => removeMultipleImage(view)}
+                                  className="absolute top-1 right-1 bg-rose-500 hover:bg-rose-600 text-white rounded-full p-1 transition-colors shadow-lg"
+                                >
+                                  <span className="material-symbols-outlined" style={{ fontSize: "0.9rem" }}>close</span>
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="aspect-square rounded-lg border-2 border-dashed border-teal-300 bg-white flex items-center justify-center">
+                                <span className="material-symbols-outlined text-teal-300" style={{ fontSize: "2rem" }}>add_photo_alternate</span>
+                              </div>
+                            )}
+                            <input
+                              type="file"
+                              id={`edit-vehicle-image-${view}`}
+                              accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                              onChange={(e) => handleMultipleImageChange(e, view)}
+                              className="hidden"
                             />
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setImageFile(null);
-                                setImagePreview("");
-                                if (selectedVehicle) {
-                                  handleEditChange("imageUrl", "");
-                                }
-                              }}
-                              className="absolute top-2 right-2 bg-rose-500 hover:bg-rose-600 text-white rounded-full p-2 transition-colors shadow-lg"
+                            <label
+                              htmlFor={`edit-vehicle-image-${view}`}
+                              className="mt-2 w-full inline-flex items-center justify-center gap-1 cursor-pointer rounded-lg bg-gradient-to-r from-slate-800 via-teal-900 to-slate-800 px-3 py-1.5 text-xs font-bold text-white hover:from-slate-700 hover:via-teal-800 hover:to-slate-700 transition-all shadow-md"
                             >
-                              <span className="material-symbols-outlined" style={{ fontSize: "1.1rem" }}>close</span>
-                            </button>
+                              <span className="material-symbols-outlined" style={{ fontSize: "0.9rem" }}>upload</span>
+                              Change
+                            </label>
                           </div>
-                        ) : (
-                          <div className="w-full aspect-square rounded-2xl border-4 border-dashed border-teal-300 bg-white flex items-center justify-center">
-                            <span className="material-symbols-outlined text-teal-400" style={{ fontSize: "5rem" }}>local_shipping</span>
-                          </div>
-                        )}
+                        ))}
                       </div>
                       
-                      {/* Upload Button */}
-                      <input
-                        type="file"
-                        id="edit-vehicle-image"
-                        accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
-                        onChange={handleImageChange}
-                        className="hidden"
-                      />
-                      <label
-                        htmlFor="edit-vehicle-image"
-                        className="w-full inline-flex items-center justify-center gap-2 cursor-pointer rounded-xl bg-gradient-to-r from-slate-800 via-teal-900 to-slate-800 px-6 py-3 text-sm font-bold text-white hover:from-slate-700 hover:via-teal-800 hover:to-slate-700 transition-all shadow-lg shadow-teal-900/30"
-                      >
-                        <span className="material-symbols-outlined" style={{ fontSize: "1.2rem" }}>upload</span>
-                        Change Image
-                      </label>
-                      <p className="text-xs text-slate-500 mt-3 text-center">
-                        JPEG, PNG, GIF, WebP<br />Max: 10MB
+                      <p className="text-xs text-slate-500 text-center">
+                        JPEG, PNG, GIF, WebP • Max: 10MB each
                       </p>
                       {uploadingImage && (
-                        <p className="text-xs text-teal-700 mt-3 flex items-center gap-1 font-semibold">
+                        <p className="text-xs text-teal-700 flex items-center justify-center gap-1 font-semibold">
                           <span className="material-symbols-outlined animate-spin" style={{ fontSize: "1rem" }}>progress_activity</span>
-                          Uploading...
+                          Uploading images...
                         </p>
                       )}
                     </div>
@@ -1815,6 +1945,45 @@ export default function VehiclePage() {
                   <span className="material-symbols-outlined" style={{ fontSize: "1.1rem" }}>delete</span>
                   Delete Vehicle
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Image Enlarge Modal */}
+      {enlargedImage && (
+        <div 
+          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm animate-fade-in"
+          onClick={() => setEnlargedImage(null)}
+        >
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setEnlargedImage(null);
+            }}
+            className="absolute top-4 right-4 z-10 bg-white/10 hover:bg-white/20 text-white rounded-full p-3 transition-colors backdrop-blur-sm border border-white/20"
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: "1.5rem" }}>close</span>
+          </button>
+          
+          <div className="relative max-w-5xl max-h-[90vh] w-full" onClick={(e) => e.stopPropagation()}>
+            {/* Image Label */}
+            <div className="absolute top-0 left-0 right-0 z-10 bg-gradient-to-b from-black/70 to-transparent p-6">
+              <h3 className="text-white text-xl font-bold drop-shadow-lg">{enlargedImage.label}</h3>
+            </div>
+            
+            {/* Enlarged Image */}
+            <img
+              src={enlargedImage.url}
+              alt={enlargedImage.label}
+              className="w-full h-full object-contain rounded-lg shadow-2xl"
+            />
+            
+            {/* Close hint */}
+            <div className="absolute bottom-4 left-0 right-0 flex justify-center">
+              <div className="bg-black/50 text-white text-sm px-4 py-2 rounded-full backdrop-blur-sm border border-white/20">
+                Click outside or press ESC to close
               </div>
             </div>
           </div>

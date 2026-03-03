@@ -31,6 +31,17 @@ interface Dispatch {
   createdAt: Timestamp | null;
 }
 
+interface Vehicle {
+  id: string;
+  codename: string;
+  status: string;
+  truckType: string;
+  plate: string;
+  personnelName?: string;
+  lat?: number;
+  lng?: number;
+}
+
 function formatTime(ts: Timestamp | null): string {
   if (!ts) return "—";
   return ts.toDate().toLocaleString("en-PH", {
@@ -45,12 +56,14 @@ function formatTime(ts: Timestamp | null): string {
 const STATUS_STYLES: Record<string, string> = {
   Pending:
     "bg-amber-100 text-amber-700 border border-amber-300",
-  "In Transit":
+  Approved:
     "bg-blue-100 text-blue-700 border border-blue-300",
+  "En Route":
+    "bg-violet-100 text-violet-700 border border-violet-300",
+  Delivered:
+    "bg-cyan-100 text-cyan-700 border border-cyan-300",
   Completed:
     "bg-emerald-100 text-emerald-700 border border-emerald-300",
-  Cancelled:
-    "bg-rose-100 text-rose-700 border border-rose-300",
 };
 
 export default function Dashboard() {
@@ -67,6 +80,67 @@ export default function Dashboard() {
     completedSupplies: 0,
     emergencyAlerts: 0,
   });
+
+  // Vehicle tracking state
+  const [selectedVehicle, setSelectedVehicle] = useState<string | null>(null);
+  const [mapCenter, setMapCenter] = useState({ lat: 9.748257, lng: 118.771556, zoom: 15 });
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+
+  // Predefined coordinates to assign to vehicles from database
+  const vehicleCoordinates = [
+    { lat: 9.8236214, lng: 118.725328 },
+    { lat: 9.4705341, lng: 118.5560033 },
+    { lat: 8.7598513, lng: 117.608354 },
+    { lat: 8.361528, lng: 117.1898946 },
+    { lat: 11.1050771, lng: 119.4691487 },
+    { lat: 9.8013701, lng: 118.749166 },
+    { lat: 11.0120693, lng: 119.3283338 },
+    { lat: 10.592036, lng: 119.8769805 },
+    { lat: 10.500585, lng: 119.8473964 },
+  ];
+
+  const handleVehicleClick = (vehicle: Vehicle) => {
+    if (vehicle.lat && vehicle.lng) {
+      setSelectedVehicle(vehicle.id);
+      setMapCenter({ lat: vehicle.lat, lng: vehicle.lng, zoom: 15 });
+    }
+  };
+
+  // Fetch vehicles from Firebase
+  useEffect(() => {
+    const fetchVehicles = async () => {
+      try {
+        const q = query(collection(db, "vehicles"), orderBy("dateAdded", "asc"));
+        const snap = await getDocs(q);
+        const vehiclesData = snap.docs.map((doc, index) => {
+          const data = doc.data();
+          // Assign coordinates to vehicles based on their order
+          // If vehicle is not serviceable, use current location (9.748257, 118.771556)
+          const coords = data.status === "Serviceable" && index < vehicleCoordinates.length
+            ? vehicleCoordinates[index]
+            : { lat: 9.748257, lng: 118.771556 };
+          
+          return {
+            id: doc.id,
+            codename: data.codename,
+            status: data.status,
+            truckType: data.truckType,
+            plate: data.plate,
+            personnelName: data.personnelName,
+            lat: coords.lat,
+            lng: coords.lng,
+          };
+        }) as Vehicle[];
+        setVehicles(vehiclesData);
+      } catch (error) {
+        console.error("Error fetching vehicles:", error);
+      }
+    };
+
+    if (user) {
+      fetchVehicles();
+    }
+  }, [user]);
 
   // Live dispatches listener
   useEffect(() => {
@@ -103,12 +177,10 @@ export default function Dashboard() {
           const data = doc.data();
           const status = data.status;
           
-          if (status === "Pending" || status === "In Transit") {
+          if (status === "Pending" || status === "Approved" || status === "En Route") {
             ongoingDeliveries++;
-          } else if (status === "Completed") {
+          } else if (status === "Delivered" || status === "Completed") {
             completedSupplies++;
-          } else if (status === "Cancelled") {
-            emergencyAlerts++;
           }
         });
 
@@ -323,39 +395,82 @@ export default function Dashboard() {
           {/* Main Grid - Map and Activity */}
           <div className="grid gap-6 lg:grid-cols-4 flex-1 min-h-0">
             {/* Map Section - Now 3/4 width and taller */}
-            <div className="lg:col-span-3 rounded-2xl bg-white p-6 shadow-lg hover:shadow-xl transition-shadow duration-300 border border-slate-100 flex flex-col min-h-[500px]">
-              <div className="mb-4 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-slate-600" style={{ fontSize: "1.5rem" }}>map</span>
-                  <div className="flex flex-col">
-                    <h2 className="text-lg font-bold text-slate-900 leading-tight">Real-Time Vehicle Tracking</h2>
-                    <p className="text-xs text-slate-500 font-medium flex items-center gap-1 mt-0.5">
-                      <span className="material-symbols-outlined text-slate-400" style={{ fontSize: "0.875rem" }}>location_on</span>
-                      GPS Monitoring — Palawan Area
-                    </p>
+            <div className="lg:col-span-3 rounded-2xl bg-gradient-to-br from-white to-slate-50/50 p-7 shadow-xl hover:shadow-2xl transition-all duration-300 border-2 border-slate-200/60 flex flex-col min-h-[500px]">
+              {/* Header Section */}
+              <div className="mb-5 pb-4 border-b-2 border-slate-100">
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg shadow-blue-500/30">
+                      <span className="material-symbols-outlined text-white" style={{ fontSize: "1.75rem" }}>map</span>
+                    </div>
+                    <div className="flex flex-col">
+                      <h2 className="text-xl font-bold text-slate-900 leading-tight tracking-tight">Real-Time Vehicle Tracking</h2>
+                      <p className="text-xs text-slate-500 font-semibold flex items-center gap-1.5 mt-1">
+                        <span className="material-symbols-outlined text-blue-500" style={{ fontSize: "0.875rem" }}>location_on</span>
+                        GPS Monitoring — Palawan Area
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    <div className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-emerald-50 to-emerald-100 px-3.5 py-2 text-[10px] font-extrabold text-emerald-700 uppercase tracking-wide border border-emerald-200 shadow-sm">
+                      <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse shadow-sm shadow-emerald-500/50"></span>
+                      Active
+                    </div>
+                    <div className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-50 to-amber-100 px-3.5 py-2 text-[10px] font-extrabold text-amber-700 uppercase tracking-wide border border-amber-200 shadow-sm">
+                      <span className="h-2 w-2 rounded-full bg-amber-500"></span>
+                      Idle
+                    </div>
+                    <div className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-rose-50 to-rose-100 px-3.5 py-2 text-[10px] font-extrabold text-rose-700 uppercase tracking-wide border border-rose-200 shadow-sm">
+                      <span className="h-2 w-2 rounded-full bg-rose-500 animate-pulse shadow-sm shadow-rose-500/50"></span>
+                      Emergency
+                    </div>
+                    <button className="flex items-center gap-2 text-xs font-extrabold text-white bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 transition-all duration-200 ml-2 px-4 py-2 rounded-xl border-2 border-blue-600 shadow-lg shadow-blue-500/30 hover:shadow-xl hover:shadow-blue-500/40 hover:scale-105 active:scale-95">
+                      <span className="material-symbols-outlined" style={{ fontSize: "1rem" }}>refresh</span>
+                      Refresh
+                    </button>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-[10px] font-bold text-emerald-700 uppercase tracking-tight">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span> Active
-                  </span>
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1 text-[10px] font-bold text-amber-700 uppercase tracking-tight">
-                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span> Idle
-                  </span>
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-100 px-3 py-1 text-[10px] font-bold text-rose-700 uppercase tracking-tight">
-                    <span className="h-1.5 w-1.5 rounded-full bg-rose-500"></span> Emergency
-                  </span>
-                  <button className="flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:text-blue-700 transition-colors ml-2 bg-blue-50 px-2 py-1.5 rounded-lg border border-blue-100">
-                    <span className="material-symbols-outlined" style={{ fontSize: "0.9rem" }}>refresh</span>
-                    Refresh
-                  </button>
+              </div>
+
+              {/* Vehicle Buttons Section */}
+              <div className="mb-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="material-symbols-outlined text-slate-500" style={{ fontSize: "1.25rem" }}>local_shipping</span>
+                  <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wide">Registered Vehicles</h3>
+                  <div className="flex-1 h-px bg-gradient-to-r from-slate-200 to-transparent"></div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {vehicles.map((vehicle) => (
+                    <button
+                      key={vehicle.id}
+                      onClick={() => handleVehicleClick(vehicle)}
+                      className={`group relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold text-xs transition-all duration-200 border ${
+                        selectedVehicle === vehicle.id
+                          ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white border-emerald-600 shadow-lg shadow-emerald-500/30 scale-105'
+                          : vehicle.status === 'Serviceable'
+                          ? 'bg-slate-700 text-slate-200 border-slate-600 hover:border-emerald-500 hover:shadow-md hover:shadow-emerald-500/20 hover:bg-slate-600'
+                          : 'bg-slate-800 text-slate-500 border-slate-700 cursor-not-allowed opacity-40'
+                      }`}
+                      disabled={vehicle.status !== 'Serviceable'}
+                    >
+                      <span className={`material-symbols-outlined ${selectedVehicle === vehicle.id ? 'text-white' : vehicle.status === 'Serviceable' ? 'text-slate-300' : 'text-slate-600'}`} style={{ fontSize: "1rem" }}>
+                        local_shipping
+                      </span>
+                      <span className="font-mono font-bold tracking-tight">{vehicle.codename}</span>
+                      {vehicle.status === 'Serviceable' && selectedVehicle === vehicle.id && (
+                        <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse"></span>
+                      )}
+                    </button>
+                  ))}
                 </div>
               </div>
-              <div className="flex-1 min-h-0 rounded-xl overflow-hidden border border-slate-200">
+
+              {/* Map Container */}
+              <div className="flex-1 min-h-0 rounded-2xl overflow-hidden border-4 border-slate-300/50 shadow-2xl shadow-slate-400/20">
                 <OpenStreetMap
-                  latitude={9.748257}
-                  longitude={118.771556}
-                  zoom={15}
+                  latitude={mapCenter.lat}
+                  longitude={mapCenter.lng}
+                  zoom={mapCenter.zoom}
                   height="h-full"
                 />
               </div>

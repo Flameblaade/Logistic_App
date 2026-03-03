@@ -602,53 +602,46 @@ export default function PersonnelsPage() {
                                         <p className="text-sm">Add one using the button above.</p>
                                     </div>
                                 ) : (
-                                    <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
                                         {filtered.map((officer, idx) => (
                                             <button
                                                 key={officer.id}
                                                 onClick={() => handleViewDetails(officer)}
-                                                className="group relative overflow-hidden rounded-3xl border-2 border-slate-200 bg-gradient-to-br from-white via-slate-50 to-gray-50 shadow-xl shadow-slate-900/10 hover:shadow-2xl hover:shadow-slate-900/20 transition-all duration-500 hover:-translate-y-2 animate-fade-in text-left outline-none cursor-pointer"
+                                                className="group relative overflow-hidden rounded-2xl border border-slate-300 bg-white shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 animate-fade-in text-left outline-none cursor-pointer"
                                                 style={{ animationDelay: `${idx * 0.06}s` }}
                                             >
                                                 {/* Decorative gradient background on hover */}
-                                                <div className="absolute inset-0 bg-gradient-to-br from-teal-50/50 via-emerald-50/30 to-slate-50 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                                                <div className="absolute inset-0 bg-gradient-to-br from-emerald-50/70 via-teal-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                                                 
-                                                {/* Animated shimmer glow */}
-                                                <div className="absolute inset-0 opacity-0 group-hover:opacity-20 transition-opacity duration-500 bg-gradient-to-r from-transparent via-teal-600/30 to-transparent blur-xl" />
+                                                {/* Card top accent with gradient */}
+                                                <div className="relative h-2 w-full bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600" />
                                                 
-                                                {/* Card top accent with shimmer effect - dark navy green */}
-                                                <div className="relative h-3 w-full bg-gradient-to-r from-slate-800 via-teal-900 to-slate-800 overflow-hidden">
-                                                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer" />
-                                                </div>
-                                                
-                                                <div className="relative p-6">
+                                                <div className="relative p-4">
                                                     {/* Avatar + name */}
-                                                    <div className="flex flex-col items-center text-center mb-5">
+                                                    <div className="flex flex-col items-center text-center mb-3">
                                                         {officer.imageUrl ? (
-                                                            <div className="relative h-28 w-28 rounded-2xl overflow-hidden shadow-2xl shadow-slate-900/30 mb-4 ring-4 ring-slate-300 group-hover:ring-teal-800/40 transition-all duration-300 group-hover:scale-110">
+                                                            <div className="relative h-20 w-20 rounded-xl overflow-hidden shadow-lg mb-3 ring-2 ring-slate-200 group-hover:ring-emerald-500 transition-all duration-300 group-hover:scale-105">
                                                                 <img
                                                                     src={officer.imageUrl}
                                                                     alt={`${officer.firstName} ${officer.lastName}`}
                                                                     className="h-full w-full object-cover"
                                                                 />
                                                                 {/* Image overlay on hover */}
-                                                                <div className="absolute inset-0 bg-gradient-to-t from-slate-900/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                                                                <div className="absolute inset-0 bg-gradient-to-t from-emerald-900/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                                                             </div>
                                                         ) : (
-                                                            <div className="flex h-28 w-28 items-center justify-center rounded-2xl bg-gradient-to-br from-slate-800 via-teal-900 to-slate-900 text-white text-4xl font-black shadow-2xl shadow-slate-900/40 mb-4 ring-4 ring-slate-300 group-hover:ring-teal-800/40 transition-all duration-300 group-hover:scale-110 relative overflow-hidden">
-                                                                {/* Subtle gradient overlay */}
-                                                                <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
+                                                            <div className="flex h-20 w-20 items-center justify-center rounded-xl bg-gradient-to-br from-slate-700 via-slate-600 to-slate-700 text-white text-2xl font-black shadow-lg mb-3 ring-2 ring-slate-200 group-hover:ring-emerald-500 transition-all duration-300 group-hover:scale-105 relative overflow-hidden">
                                                                 <span className="relative z-10">{initials(officer)}</span>
                                                             </div>
                                                         )}
                                                         
-                                                        <h3 className="font-black text-slate-900 text-lg leading-tight mb-3 group-hover:text-teal-900 transition-colors duration-300">
+                                                        <h3 className="font-bold text-slate-900 text-sm leading-tight mb-2 group-hover:text-emerald-700 transition-colors duration-300 line-clamp-2">
                                                             {officer.rank} {officer.lastName}, {officer.firstName}{" "}
                                                             {officer.middleInitial}.
                                                         </h3>
                                                         
-                                                        <span className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-slate-800 via-teal-900 to-slate-800 px-5 py-2.5 text-xs font-bold text-white shadow-lg shadow-slate-900/30 border border-slate-700 group-hover:shadow-xl group-hover:shadow-slate-900/50 group-hover:scale-105 transition-all duration-300">
-                                                            <span className="material-symbols-outlined" style={{ fontSize: "1rem" }}>
+                                                        <span className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-slate-700 to-slate-600 px-3 py-1.5 text-[10px] font-bold text-white shadow-md group-hover:from-emerald-600 group-hover:to-teal-600 group-hover:shadow-lg transition-all duration-300">
+                                                            <span className="material-symbols-outlined" style={{ fontSize: "0.75rem" }}>
                                                                 badge
                                                             </span>
                                                             {officer.position}
@@ -656,37 +649,37 @@ export default function PersonnelsPage() {
                                                     </div>
 
                                                     {/* Details */}
-                                                    <div className="space-y-3 text-sm text-slate-700 border-t-2 border-slate-200 pt-5 mt-4">
-                                                        <div className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-100 transition-all duration-200 group/item">
-                                                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-slate-800 via-teal-900 to-slate-900 shadow-lg shadow-slate-900/30 group-hover/item:shadow-slate-900/50 transition-all duration-300">
-                                                                <span className="material-symbols-outlined text-white" style={{ fontSize: "1.2rem" }}>
+                                                    <div className="space-y-2 text-xs border-t border-slate-200 pt-3 mt-3">
+                                                        <div className="flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50 transition-all duration-200">
+                                                            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-100 text-slate-700">
+                                                                <span className="material-symbols-outlined" style={{ fontSize: "0.9rem" }}>
                                                                     call
                                                                 </span>
                                                             </div>
-                                                            <span className="font-bold text-slate-900">{officer.contactNo || "—"}</span>
+                                                            <span className="font-semibold text-slate-700 truncate">{officer.contactNo || "—"}</span>
                                                         </div>
-                                                        <div className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-100 transition-all duration-200 group/item">
-                                                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-slate-800 via-teal-900 to-slate-900 shadow-lg shadow-slate-900/30 group-hover/item:shadow-slate-900/50 transition-all duration-300">
-                                                                <span className="material-symbols-outlined text-white" style={{ fontSize: "1.2rem" }}>
+                                                        <div className="flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50 transition-all duration-200">
+                                                            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-100 text-slate-700">
+                                                                <span className="material-symbols-outlined" style={{ fontSize: "0.9rem" }}>
                                                                     mail
                                                                 </span>
                                                             </div>
-                                                            <span className="truncate font-bold text-slate-900">{officer.email || "—"}</span>
+                                                            <span className="truncate font-semibold text-slate-700">{officer.email || "—"}</span>
                                                         </div>
-                                                        <div className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-100 transition-all duration-200 group/item">
-                                                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-slate-800 via-teal-900 to-slate-900 shadow-lg shadow-slate-900/30 group-hover/item:shadow-slate-900/50 transition-all duration-300">
-                                                                <span className="material-symbols-outlined text-white" style={{ fontSize: "1.2rem" }}>
+                                                        <div className="flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50 transition-all duration-200">
+                                                            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-100 text-slate-700">
+                                                                <span className="material-symbols-outlined" style={{ fontSize: "0.9rem" }}>
                                                                     calendar_today
                                                                 </span>
                                                             </div>
-                                                            <span className="font-semibold text-slate-800 text-xs">Added: {officer.dateAdded}</span>
+                                                            <span className="font-medium text-slate-600 text-[10px] truncate">{officer.dateAdded}</span>
                                                         </div>
                                                     </div>
                                                     
-                                                    {/* Hover indicator with dark navy-green gradient */}
-                                                    <div className="absolute bottom-6 right-6 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-2 group-hover:translate-y-0">
-                                                        <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-slate-800 via-teal-900 to-slate-900 text-white shadow-xl shadow-slate-900/60">
-                                                            <span className="material-symbols-outlined" style={{ fontSize: "1.4rem" }}>
+                                                    {/* Hover indicator */}
+                                                    <div className="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-x-1 group-hover:translate-x-0">
+                                                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-emerald-600 to-teal-600 text-white shadow-lg">
+                                                            <span className="material-symbols-outlined" style={{ fontSize: "1.1rem" }}>
                                                                 arrow_forward
                                                             </span>
                                                         </div>
