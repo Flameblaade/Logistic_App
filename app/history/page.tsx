@@ -104,6 +104,7 @@ export default function HistoryPage() {
     { name: "Dashboard", icon: "dashboard", href: "/dashboard", active: false },
     { name: "Personnels", icon: "groups", href: "/personnels", active: false },
     { name: "Vehicle", icon: "local_shipping", href: "/vehicle", active: false },
+    { name: "Emergency Alerts", icon: "emergency", href: "/emergency-alerts", active: false },
     { name: "History", icon: "history", href: "/history", active: true },
   ];
 

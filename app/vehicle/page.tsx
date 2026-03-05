@@ -506,6 +506,7 @@ export default function VehiclePage() {
     { name: "Dashboard", icon: "dashboard", href: "/dashboard", active: false },
     { name: "Personnels", icon: "groups", href: "/personnels", active: false },
     { name: "Vehicle", icon: "local_shipping", href: "/vehicle", active: true },
+    { name: "Emergency Alerts", icon: "emergency", href: "/emergency-alerts", active: false },
     { name: "History", icon: "history", href: "/history", active: false },
   ];
 

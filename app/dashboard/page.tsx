@@ -7,6 +7,7 @@ import Image from "next/image";
 import { OpenStreetMap } from "@/components/OpenStreetMap";
 import DispatchModal from "@/components/DispatchModal";
 import DispatchDetailModal from "@/components/DispatchDetailModal";
+import TICEmergencyModal from "@/components/TICEmergencyModal";
 import {
   collection,
   query,
@@ -60,6 +61,8 @@ const STATUS_STYLES: Record<string, string> = {
     "bg-blue-100 text-blue-700 border border-blue-300",
   "En Route":
     "bg-violet-100 text-violet-700 border border-violet-300",
+  Ongoing:
+    "bg-orange-100 text-orange-700 border border-orange-300",
   Delivered:
     "bg-cyan-100 text-cyan-700 border border-cyan-300",
   Completed:
@@ -71,14 +74,15 @@ export default function Dashboard() {
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showDispatchModal, setShowDispatchModal] = useState(false);
+  const [showTICModal, setShowTICModal] = useState(false);
   const [dispatches, setDispatches] = useState<Dispatch[]>([]);
   const [selectedDispatch, setSelectedDispatch] = useState<Dispatch | null>(null);
   const [dispatchRefresh, setDispatchRefresh] = useState(0);
   const [metrics, setMetrics] = useState({
     totalActiveVehicles: 0,
     ongoingDeliveries: 0,
-    completedSupplies: 0,
-    emergencyAlerts: 0,
+    completedDispatches: 0,
+    totalPersonnel: 0,
   });
 
   // Vehicle tracking state
@@ -167,28 +171,31 @@ export default function Dashboard() {
         );
         const totalActiveVehicles = vehiclesSnap.size;
 
+        // Count total personnel
+        const personnelSnap = await getDocs(collection(db, "personnelAccount"));
+        const totalPersonnel = personnelSnap.size;
+
         // Count dispatches by status
         const allDispatchesSnap = await getDocs(collection(db, "dispatches"));
         let ongoingDeliveries = 0;
-        let completedSupplies = 0;
-        let emergencyAlerts = 0;
+        let completedDispatches = 0;
 
         allDispatchesSnap.forEach((doc) => {
           const data = doc.data();
           const status = data.status;
           
-          if (status === "Pending" || status === "Approved" || status === "En Route") {
+          if (status === "Pending" || status === "Approved" || status === "En Route" || status === "Ongoing") {
             ongoingDeliveries++;
           } else if (status === "Delivered" || status === "Completed") {
-            completedSupplies++;
+            completedDispatches++;
           }
         });
 
         setMetrics({
           totalActiveVehicles,
           ongoingDeliveries,
-          completedSupplies,
-          emergencyAlerts,
+          completedDispatches,
+          totalPersonnel,
         });
       } catch (error) {
         console.error("Error fetching metrics:", error);
@@ -230,17 +237,62 @@ export default function Dashboard() {
     { name: "Dashboard", icon: "dashboard", href: "/dashboard", active: true },
     { name: "Personnels", icon: "groups", href: "/personnels", active: false },
     { name: "Vehicle", icon: "local_shipping", href: "/vehicle", active: false },
+    { name: "Emergency Alerts", icon: "emergency", href: "/emergency-alerts", active: false },
     { name: "History", icon: "history", href: "/history", active: false },
   ];
 
   const metricCards = [
     { title: "Total Serviceable Vehicle", value: metrics.totalActiveVehicles.toString(), icon: "local_shipping", color: "from-violet-600 to-violet-800", glow: "shadow-violet-500/30" },
     { title: "Ongoing Deliveries", value: metrics.ongoingDeliveries.toString(), icon: "deployed_code", color: "from-amber-500 to-orange-700", glow: "shadow-amber-500/30" },
-    { title: "Completed Supplies", value: metrics.completedSupplies.toString(), icon: "task_alt", color: "from-emerald-500 to-green-700", glow: "shadow-emerald-500/30" },
-    { title: "Emergency Alerts", value: metrics.emergencyAlerts.toString(), icon: "warning_amber", color: "from-rose-500 to-red-700", glow: "shadow-rose-500/30" },
+    { title: "Completed Dispatches", value: metrics.completedDispatches.toString(), icon: "task_alt", color: "from-emerald-500 to-green-700", glow: "shadow-emerald-500/30" },
+    { title: "Total Personnel", value: metrics.totalPersonnel.toString(), icon: "badge", color: "from-blue-500 to-blue-700", glow: "shadow-blue-500/30" },
   ];
 
-  const activities: { type: string; icon: string; iconColor: string; time: string }[] = [];
+  // Generate activities from dispatches
+  const getStatusIcon = (status: string): { icon: string; iconColor: string } => {
+    switch (status) {
+      case "Pending":
+        return { icon: "schedule", iconColor: "text-amber-500" };
+      case "Approved":
+        return { icon: "check_circle", iconColor: "text-blue-500" };
+      case "En Route":
+        return { icon: "local_shipping", iconColor: "text-violet-500" };
+      case "Ongoing":
+        return { icon: "deployed_code", iconColor: "text-orange-500" };
+      case "Delivered":
+        return { icon: "inventory_2", iconColor: "text-cyan-500" };
+      case "Completed":
+        return { icon: "task_alt", iconColor: "text-emerald-500" };
+      default:
+        return { icon: "info", iconColor: "text-slate-500" };
+    }
+  };
+
+  const getRelativeTime = (timestamp: Timestamp | null): string => {
+    if (!timestamp) return "—";
+    const now = new Date();
+    const date = timestamp.toDate();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return "Just now";
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString("en-PH", { month: "short", day: "numeric" });
+  };
+
+  const activities = dispatches.map((d) => {
+    const statusInfo = getStatusIcon(d.status);
+    return {
+      type: `${d.dispatchId} • ${d.status}`,
+      icon: statusInfo.icon,
+      iconColor: statusInfo.iconColor,
+      time: getRelativeTime(d.createdAt),
+    };
+  });
 
   return (
     <div className="flex h-screen bg-gradient-to-br from-slate-100 to-slate-200">
@@ -257,6 +309,15 @@ export default function Dashboard() {
         <DispatchDetailModal
           dispatch={selectedDispatch}
           onClose={() => setSelectedDispatch(null)}
+        />
+      )}
+
+      {/* TIC Emergency Modal */}
+      {showTICModal && (
+        <TICEmergencyModal
+          onClose={() => setShowTICModal(false)}
+          truckCodename="TRUCK-07"
+          personnelName="SGT. Rodriguez"
         />
       )}
 
@@ -343,6 +404,15 @@ export default function Dashboard() {
               <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Dashboard</h1>
             </div>
             <div className="flex items-center gap-3">
+              {/* ── TIC Sample Button ── */}
+              <button
+                onClick={() => setShowTICModal(true)}
+                className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-rose-600 to-red-700 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-red-500/40 hover:shadow-xl hover:from-rose-500 hover:to-red-600 hover:scale-[1.03] active:scale-95 transition-all duration-200 animate-pulse-subtle"
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: "1.1rem" }}>emergency</span>
+                TIC Sample
+              </button>
+
               {/* ── Create Dispatch Button ── */}
               <button
                 onClick={() => setShowDispatchModal(true)}
@@ -491,21 +561,28 @@ export default function Dashboard() {
                   </span>
                 </div>
                 <div className="space-y-2 flex-1 overflow-y-auto pr-1 min-h-0 custom-scrollbar">
-                  {activities.map((activity, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center justify-between rounded-xl bg-slate-50 hover:bg-slate-100 p-3 transition-all duration-200 animate-slide-up group"
-                      style={{ animationDelay: `${index * 0.05}s` }}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white shadow-sm flex-shrink-0">
-                          <span className={`material-symbols-outlined ${activity.iconColor}`} style={{ fontSize: "1.1rem" }}>{activity.icon}</span>
-                        </div>
-                        <p className="text-xs font-semibold text-slate-700 truncate">{activity.type}</p>
-                      </div>
-                      <p className="text-[10px] font-medium text-slate-400 whitespace-nowrap ml-2">{activity.time}</p>
+                  {activities.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full text-slate-400">
+                      <span className="material-symbols-outlined mb-2" style={{ fontSize: "2.5rem" }}>hourglass_empty</span>
+                      <p className="text-xs font-semibold">No activity yet</p>
                     </div>
-                  ))}
+                  ) : (
+                    activities.map((activity, index) => (
+                      <div
+                        key={index}
+                        className="flex items-center justify-between rounded-xl bg-slate-50 hover:bg-slate-100 p-3 transition-all duration-200 animate-slide-up group"
+                        style={{ animationDelay: `${index * 0.05}s` }}
+                      >
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white shadow-sm flex-shrink-0">
+                            <span className={`material-symbols-outlined ${activity.iconColor}`} style={{ fontSize: "1.1rem" }}>{activity.icon}</span>
+                          </div>
+                          <p className="text-xs font-semibold text-slate-700 truncate">{activity.type}</p>
+                        </div>
+                        <p className="text-[10px] font-medium text-slate-400 whitespace-nowrap ml-2">{activity.time}</p>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
 
@@ -583,6 +660,10 @@ export default function Dashboard() {
           from { opacity: 0; transform: translateX(-8px); }
           to   { opacity: 1; transform: translateX(0); }
         }
+        @keyframes pulse-subtle {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.85; }
+        }
         .animate-fade-in {
           animation: fade-in 0.4s ease-out forwards;
           opacity: 0;
@@ -590,6 +671,9 @@ export default function Dashboard() {
         .animate-slide-up {
           animation: slide-up 0.3s ease-out forwards;
           opacity: 0;
+        }
+        .animate-pulse-subtle {
+          animation: pulse-subtle 2s ease-in-out infinite;
         }
       `}</style>
     </div>

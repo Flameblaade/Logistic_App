@@ -83,10 +83,10 @@ export default function PersonnelsPage() {
         { name: "Dashboard", icon: "dashboard", href: "/dashboard", active: false },
         { name: "Personnels", icon: "groups", href: "/personnels", active: true },
         { name: "Vehicle", icon: "local_shipping", href: "/vehicle", active: false },
+        { name: "Emergency Alerts", icon: "emergency", href: "/emergency-alerts", active: false },
         { name: "History", icon: "history", href: "/history", active: false },
     ];
 
-    // ── fetch officers ──────────────────────────────────────────────
     const fetchOfficers = async () => {
         setFetchLoading(true);
         try {
