@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import TICEmergencyModal from "@/components/TICEmergencyModal";
 import {
@@ -10,8 +10,9 @@ import {
   query,
   orderBy,
   onSnapshot,
-  where,
   Timestamp,
+  doc,
+  updateDoc,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
@@ -35,6 +36,8 @@ export default function EmergencyAlerts() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [selectedReport, setSelectedReport] = useState<EmergencyReport | null>(null);
   const [emergencyReports, setEmergencyReports] = useState<EmergencyReport[]>([]);
+  const [seenReportIds, setSeenReportIds] = useState<Set<string>>(new Set());
+  const prevReportsCount = useRef(0);
 
   // Fetch all emergency reports from Firebase
   useEffect(() => {
@@ -47,16 +50,149 @@ export default function EmergencyAlerts() {
     );
 
     const unsub = onSnapshot(q, (snap) => {
-      const reports = snap.docs.map((d) => ({
-        id: d.id,
-        ...(d.data() as Omit<EmergencyReport, "id">),
-      }));
+      console.log("📚 Raw Firestore snapshot - docs count:", snap.docs.length);
+      
+      const reports = snap.docs.map((d) => {
+        const data = d.data();
+        const reportId = d.id;
+        console.log("📝 Processing doc - ID:", reportId, "Exists:", d.exists());
+        
+        return {
+          ...data as Omit<EmergencyReport, "id">,
+          id: reportId, // Must be AFTER spread to prevent overwriting
+        };
+      });
+      
+      // Check for duplicate IDs (debugging)
+      const ids = reports.map(r => r.id);
+      const duplicates = ids.filter((id, index) => ids.indexOf(id) !== index);
+      if (duplicates.length > 0) {
+        console.warn("⚠️ Duplicate emergency report IDs found:", duplicates);
+      }
+      
+      // Log all report IDs for debugging
+      console.log("📋 Loaded emergency reports:", reports.length);
+      reports.forEach((r, idx) => {
+        console.log(`  [${idx}] ID: "${r.id}", Type: ${typeof r.id}, Valid: ${!!r.id}, Length: ${r.id?.length}`);
+      });
       
       setEmergencyReports(reports);
     });
 
     return () => unsub();
   }, [user]);
+
+  // Auto-open modal for new emergency reports
+  useEffect(() => {
+    if (emergencyReports.length === 0) return;
+    
+    // Don't auto-open if modal is already open
+    if (selectedReport !== null) {
+      console.log("🚫 Skipping auto-open - modal already open");
+      return;
+    }
+    
+    // Check if there's a new report (not in seen list and not resolved)
+    const unseenReports = emergencyReports.filter(report => 
+      report.id && !seenReportIds.has(report.id) && report.status !== 'resolved'
+    );
+    
+    if (unseenReports.length > 0 && emergencyReports.length > prevReportsCount.current) {
+      // New emergency report detected! Auto-open the modal
+      const newestReport = unseenReports[0]; // Already sorted by timestamp desc
+      
+      if (!newestReport.id) {
+        console.error("❌ Cannot auto-open report without ID:", newestReport);
+        return;
+      }
+      
+      console.log("🚨 NEW EMERGENCY REPORT DETECTED:", newestReport.id);
+      console.log("📋 Report details:", {
+        type: newestReport.type,
+        sender: newestReport.senderName || newestReport.reportedBy,
+        dispatchId: newestReport.dispatchId,
+        location: newestReport.location?.label
+      });
+      
+      setSelectedReport(newestReport);
+      setSeenReportIds(prev => new Set([...prev, newestReport.id]));
+      
+      // Optional: Play notification sound
+      try {
+        const audio = new Audio('/notification.mp3');
+        audio.play().catch(e => console.log("Could not play sound:", e));
+      } catch (e) {
+        console.log("Audio not available");
+      }
+    }
+    
+    prevReportsCount.current = emergencyReports.length;
+  }, [emergencyReports, seenReportIds, selectedReport]);
+
+  // Mark report as seen when manually opened
+  const handleReportClick = (report: EmergencyReport) => {
+    console.log("👆 Report clicked manually - ID:", report.id, "Current modal state:", selectedReport?.id);
+    
+    if (!report.id) {
+      console.error("❌ Cannot open report without ID:", report);
+      alert("Error: This report has no ID. Please refresh the page.");
+      return;
+    }
+    
+    // Prevent opening if this report is already open
+    if (selectedReport?.id === report.id) {
+      console.log("🚫 Report already open, skipping");
+      return;
+    }
+    
+    setSelectedReport(report);
+    setSeenReportIds(prev => new Set([...prev, report.id]));
+  };
+
+  // Resolve an emergency report
+  const handleResolveReport = async (reportId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    console.log("🔍 handleResolveReport called with:", { 
+      reportId, 
+      type: typeof reportId, 
+      length: reportId?.length,
+      isEmpty: reportId === '',
+      isUndefined: reportId === undefined,
+      isNull: reportId === null
+    });
+    
+    if (!reportId || typeof reportId !== 'string' || reportId.trim() === '') {
+      console.error("❌ Invalid report ID:", reportId);
+      alert("Cannot resolve: Invalid report ID. Please refresh the page and try again.");
+      return;
+    }
+    
+    const confirmed = confirm(
+      "Are you sure you want to mark this emergency as RESOLVED? This will update the status."
+    );
+
+    if (!confirmed) return;
+
+    try {
+      console.log("✅ Resolving emergency report:", reportId);
+      console.log("📍 Document path:", `EmergencyReports/${reportId}`);
+      
+      const reportRef = doc(db, "EmergencyReports", reportId);
+      await updateDoc(reportRef, {
+        status: "resolved",
+        resolvedAt: Timestamp.now(),
+        resolvedBy: user?.uid,
+      });
+      
+      console.log("✅ Emergency resolved successfully");
+    } catch (error: any) {
+      console.error("❌ Error resolving emergency:", error);
+      console.error("❌ Error code:", error?.code);
+      console.error("❌ Report ID was:", reportId);
+      alert(`Failed to resolve emergency: ${error?.message || "Unknown error"}`);
+    }
+  };
 
   if (loading) {
     return (
@@ -118,8 +254,12 @@ export default function EmergencyAlerts() {
   // Calculate stats
   const stats = {
     totalEmergencies: emergencyReports.length,
-    activeEmergencies: emergencyReports.length, // All emergency reports are considered active
+    activeEmergencies: emergencyReports.filter(r => r.status !== 'resolved').length,
+    resolvedEmergencies: emergencyReports.filter(r => r.status === 'resolved').length,
   };
+  
+  // Count unseen reports
+  const unseenCount = emergencyReports.filter(report => report.id && !seenReportIds.has(report.id) && report.status !== 'resolved').length;
 
   return (
     <div className="flex h-screen bg-gradient-to-br from-slate-100 to-slate-200">
@@ -130,6 +270,7 @@ export default function EmergencyAlerts() {
           truckCodename={selectedReport.type || "EMERGENCY"}
           personnelName={selectedReport.senderName || selectedReport.reportedBy || "Field Personnel"}
           emergencyReportId={selectedReport.id}
+          dispatchId={selectedReport.dispatchId}
           location={selectedReport.location}
           description={selectedReport.description}
           imageUrl={selectedReport.imageUrl}
@@ -158,6 +299,19 @@ export default function EmergencyAlerts() {
               <div className="animate-fade-in overflow-hidden">
                 <p className="font-bold text-white tracking-wide text-lg">2nd JLSU</p>
                 <p className="text-xs text-slate-400">Log Truck System</p>
+              </div>
+            )}
+            {stats.resolvedEmergencies > 0 && (
+              <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl p-6 shadow-xl shadow-green-500/30 text-white">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-white/70">Resolved Emergencies</p>
+                    <p className="mt-2 text-4xl font-bold">{stats.resolvedEmergencies}</p>
+                  </div>
+                  <div className="rounded-2xl bg-white/10 p-3 backdrop-blur-sm">
+                    <span className="material-symbols-outlined text-white/80" style={{ fontSize: "2rem" }}>task_alt</span>
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -225,7 +379,14 @@ export default function EmergencyAlerts() {
             <div className="flex items-center gap-3">
               <button className="relative p-2.5 hover:bg-slate-100 rounded-xl transition-colors group">
                 <span className="material-symbols-outlined text-slate-500 group-hover:text-slate-700" style={{ fontSize: "1.5rem" }}>notifications</span>
-                <span className="absolute top-1.5 right-1.5 h-2.5 w-2.5 bg-rose-500 rounded-full animate-pulse ring-2 ring-white"></span>
+                {unseenCount > 0 && (
+                  <>
+                    <span className="absolute top-1.5 right-1.5 h-2.5 w-2.5 bg-rose-500 rounded-full animate-pulse ring-2 ring-white"></span>
+                    <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white text-xs font-bold ring-2 ring-white">
+                      {unseenCount}
+                    </span>
+                  </>
+                )}
               </button>
               <div className="flex items-center gap-3 pl-4 border-l border-slate-200">
                 <div className="text-right">
@@ -242,6 +403,31 @@ export default function EmergencyAlerts() {
 
         {/* Page Content */}
         <main className="flex-1 overflow-auto p-6 flex flex-col gap-6">
+          {/* New Emergency Alert Banner */}
+          {unseenCount > 0 && (
+            <div className="bg-gradient-to-r from-yellow-500 to-orange-500 rounded-2xl p-4 shadow-xl text-white border-4 border-yellow-300 animate-pulse">
+              <div className="flex items-center gap-4">
+                <div className="flex-shrink-0">
+                  <span className="material-symbols-outlined text-white text-5xl animate-bounce">priority_high</span>
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-xl font-black uppercase tracking-wide">⚠️ New Emergency Alert!</h3>
+                  <p className="text-sm font-semibold text-white/90 mt-1">
+                    {unseenCount} {unseenCount === 1 ? 'new emergency report' : 'new emergency reports'} requiring immediate attention
+                  </p>
+                </div>
+                <div className="flex-shrink-0">
+                  <button 
+                    onClick={() => unseenCount > 0 && handleReportClick(emergencyReports.find(r => !seenReportIds.has(r.id))!)}
+                    className="px-6 py-3 bg-white text-orange-600 font-bold rounded-xl hover:bg-yellow-50 transition-all shadow-lg"
+                  >
+                    View Now
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          
           {/* Stats Grid */}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
             <div className="bg-gradient-to-br from-red-600 to-rose-700 rounded-2xl p-6 shadow-xl shadow-red-500/30 text-white">
@@ -269,14 +455,28 @@ export default function EmergencyAlerts() {
             <div className="bg-gradient-to-br from-violet-600 to-purple-700 rounded-2xl p-6 shadow-xl shadow-violet-500/30 text-white">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-white/70">Reporting Personnel</p>
+                  <p className="text-sm font-medium text-white/70">Unique Personnel</p>
                   <p className="mt-2 text-4xl font-bold">{new Set(emergencyReports.map(r => r.senderId)).size}</p>
                 </div>
                 <div className="rounded-2xl bg-white/10 p-3 backdrop-blur-sm">
-                  <span className="material-symbols-outlined text-white/80" style={{ fontSize: "2rem" }}>groups</span>
+                  <span className="material-symbols-outlined text-white/80" style={{ fontSize: "2rem" }}>group</span>
                 </div>
               </div>
             </div>
+            {unseenCount > 0 && (
+              <div className="bg-gradient-to-br from-yellow-500 to-amber-600 rounded-2xl p-6 shadow-xl shadow-yellow-500/30 text-white animate-pulse">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-white/70">New/Unseen Reports</p>
+                    <p className="mt-2 text-4xl font-bold">{unseenCount}</p>
+                  </div>
+                  <div className="rounded-2xl bg-white/10 p-3 backdrop-blur-sm">
+                    <span className="material-symbols-outlined text-white/80" style={{ fontSize: "2rem" }}>notification_important</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
           </div>
 
           {/* Emergency Reports Table */}
@@ -307,7 +507,7 @@ export default function EmergencyAlerts() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {emergencyReports.length === 0 ? (
+                  {emergencyReports.filter(r => r.status !== 'resolved').length === 0 ? (
                     <tr>
                       <td colSpan={8} className="px-6 py-12 text-center">
                         <div className="flex flex-col items-center justify-center text-slate-400">
@@ -318,16 +518,28 @@ export default function EmergencyAlerts() {
                       </td>
                     </tr>
                   ) : (
-                    emergencyReports.map((report) => (
-                      <tr key={report.id} className="hover:bg-red-50/50 transition-colors">
+                    emergencyReports.filter(r => r.status !== 'resolved').map((report, index) => {
+                      const isNew = !seenReportIds.has(report.id);
+                      return (
+                        <tr 
+                          key={report.id || `report-${index}`} 
+                          className={`hover:bg-red-50/50 transition-colors ${isNew ? 'bg-yellow-50/50 border-l-4 border-yellow-500' : ''}`}
+                        >
                         <td className="px-6 py-4">
-                          <div className="flex flex-col">
-                            <span className="font-mono text-xs font-bold text-slate-500">
-                              #{report.id.slice(-6).toUpperCase()}
-                            </span>
-                            <span className="text-xs text-slate-400 mt-1">
-                              {formatTimestamp(report.timestamp)}
-                            </span>
+                          <div className="flex items-center gap-2">
+                            {isNew && (
+                              <span className="flex items-center gap-1 px-2 py-0.5 bg-yellow-500 text-white text-xs font-black rounded-full animate-pulse">
+                                NEW
+                              </span>
+                            )}
+                            <div className="flex flex-col">
+                              <span className="font-mono text-xs font-bold text-slate-500">
+                                #{report.id ? report.id.slice(-6).toUpperCase() : 'N/A'}
+                              </span>
+                              <span className="text-xs text-slate-400 mt-1">
+                                {formatTimestamp(report.timestamp)}
+                              </span>
+                            </div>
                           </div>
                         </td>
                         <td className="px-6 py-4">
@@ -344,9 +556,13 @@ export default function EmergencyAlerts() {
                           </span>
                         </td>
                         <td className="px-6 py-4">
-                          <span className="inline-flex items-center rounded-full border px-3 py-1 text-xs font-bold uppercase bg-red-100 text-red-700 border-red-300 animate-pulse">
-                            <span className="mr-1.5 h-2 w-2 rounded-full bg-red-500"></span>
-                            {report.status || "ACTIVE"}
+                          <span className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-bold uppercase ${
+                            report.status === 'resolved' 
+                              ? 'bg-green-100 text-green-700 border-green-300'
+                              : 'bg-red-100 text-red-700 border-red-300 animate-pulse'
+                          }`}>
+                            {report.status !== 'resolved' && <span className="mr-1.5 h-2 w-2 rounded-full bg-red-500"></span>}
+                            {report.status === 'resolved' ? 'RESOLVED' : (report.status || "ACTIVE").toUpperCase()}
                           </span>
                         </td>
                         <td className="px-6 py-4">
@@ -373,16 +589,35 @@ export default function EmergencyAlerts() {
                           </span>
                         </td>
                         <td className="px-6 py-4">
-                          <button
-                            onClick={() => setSelectedReport(report)}
-                            className="flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-xs font-bold text-red-700 hover:bg-red-100 transition-colors border border-red-200 hover:border-red-300"
-                          >
-                            <span className="material-symbols-outlined" style={{ fontSize: "1rem" }}>chat</span>
-                            Respond
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => handleReportClick(report)}
+                              className="flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-xs font-bold text-red-700 hover:bg-red-100 transition-colors border border-red-200 hover:border-red-300"
+                            >
+                              <span className="material-symbols-outlined" style={{ fontSize: "1rem" }}>chat</span>
+                              Respond
+                            </button>
+                            {report.status !== 'resolved' && report.id && (
+                              <button
+                                onClick={(e) => {
+                                  console.log("🔘 Resolve button clicked for report:", report.id, "Type:", typeof report.id);
+                                  if (!report.id) {
+                                    alert("Error: Report has no ID. Please refresh the page.");
+                                    return;
+                                  }
+                                  handleResolveReport(report.id, e);
+                                }}
+                                className="flex items-center gap-1.5 rounded-lg bg-green-50 px-3 py-2 text-xs font-bold text-green-700 hover:bg-green-100 transition-colors border border-green-200 hover:border-green-300"
+                              >
+                                <span className="material-symbols-outlined" style={{ fontSize: "1rem" }}>check_circle</span>
+                                Resolve
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
-                    ))
+                      );
+                    })
                   )}
                 </tbody>
               </table>

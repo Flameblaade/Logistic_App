@@ -10,6 +10,9 @@ import {
   orderBy,
   onSnapshot,
   Timestamp,
+  doc,
+  getDoc,
+  updateDoc,
 } from "firebase/firestore";
 
 interface Message {
@@ -27,9 +30,11 @@ interface TICEmergencyModalProps {
   truckCodename?: string;
   personnelName?: string;
   emergencyReportId?: string;
+  dispatchId?: string;
   location?: { lat: number; lng: number; label?: string };
   description?: string;
   imageUrl?: string;
+  onResolved?: () => void;
 }
 
 export default function TICEmergencyModal({
@@ -37,6 +42,7 @@ export default function TICEmergencyModal({
   truckCodename = "TIC",
   personnelName = "Field Personnel",
   emergencyReportId,
+  dispatchId,
   location,
   description,
   imageUrl,
@@ -45,25 +51,100 @@ export default function TICEmergencyModal({
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState("");
   const [sending, setSending] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [userDisplayName, setUserDisplayName] = useState("");
+  const [roleChecked, setRoleChecked] = useState(false);
+  const [resolving, setResolving] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Debug: Log IDs when component mounts or props change
+  useEffect(() => {
+    console.log("🔍 Modal opened with:", {
+      emergencyReportId,
+      dispatchId,
+      willUseCollection: dispatchId ? "dispatches" : "EmergencyReports",
+      willUseChatId: dispatchId || emergencyReportId
+    });
+  }, [emergencyReportId, dispatchId]);
+
+  // Detect if current user is admin (users collection) or personnel (personnelAccount collection)
+  useEffect(() => {
+    const checkUserRole = async () => {
+      if (!user) return;
+
+      try {
+        console.log("🔍 Checking user role for:", user.uid);
+        
+        // Check if user exists in "users" collection (admin)
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        if (userDoc.exists()) {
+          setIsAdmin(true);
+          setUserDisplayName(user.displayName || user.email || "Admin");
+          setRoleChecked(true);
+          console.log("✅ User is ADMIN:", user.displayName || user.email);
+          return;
+        }
+
+        // Check if user exists in "personnelAccount" collection (personnel)
+        const personnelDoc = await getDoc(doc(db, "personnelAccount", user.uid));
+        if (personnelDoc.exists()) {
+          setIsAdmin(false);
+          const data = personnelDoc.data();
+          setUserDisplayName(data?.fullName || data?.name || "Personnel");
+          setRoleChecked(true);
+          console.log("✅ User is PERSONNEL:", data?.fullName || data?.name);
+          return;
+        }
+
+        // Fallback
+        setIsAdmin(false);
+        setUserDisplayName(user.displayName || user.email || "User");
+        setRoleChecked(true);
+        console.warn("⚠️ User not found in users or personnelAccount collections");
+      } catch (error) {
+        console.error("❌ Error checking user role:", error);
+        setIsAdmin(false);
+        setUserDisplayName(user.displayName || user.email || "User");
+        setRoleChecked(true);
+      }
+    };
+
+    checkUserRole();
+  }, [user]);
 
   // Real-time listener for messages
   useEffect(() => {
-    if (!emergencyReportId) return;
+    // Priority: Use dispatchId if available (mobile app uses this), otherwise use emergencyReportId
+    const chatId = dispatchId || emergencyReportId;
+    const collectionName = dispatchId ? "dispatches" : "EmergencyReports";
+    
+    if (!chatId) {
+      console.warn("⚠️ No dispatchId or emergencyReportId provided");
+      return;
+    }
 
-    const messagesRef = collection(db, "EmergencyReports", emergencyReportId, "messages");
+    console.log(`📡 Starting to listen for messages in: ${collectionName}/${chatId}`);
+    const messagesRef = collection(db, collectionName, chatId, "messages");
     const q = query(messagesRef, orderBy("timestamp", "asc"));
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const loadedMessages = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...(doc.data() as Omit<Message, "id">),
-      }));
-      setMessages(loadedMessages);
-    });
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const loadedMessages = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...(doc.data() as Omit<Message, "id">),
+        }));
+        console.log("📨 Loaded messages:", loadedMessages.length);
+        setMessages(loadedMessages);
+      },
+      (error) => {
+        console.error("❌ Error listening to messages:", error);
+        alert("Error loading messages: " + error.message);
+      }
+    );
 
     return () => unsubscribe();
-  }, [emergencyReportId]);
+  }, [emergencyReportId, dispatchId]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -75,26 +156,96 @@ export default function TICEmergencyModal({
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputMessage.trim() || !emergencyReportId || !user) return;
+    
+    const chatId = dispatchId || emergencyReportId;
+    if (!inputMessage.trim() || !chatId || !user) {
+      console.warn("⚠️ Cannot send - missing data:", {
+        hasMessage: !!inputMessage.trim(),
+        hasDispatchId: !!dispatchId,
+        hasReportId: !!emergencyReportId,
+        hasUser: !!user,
+      });
+      return;
+    }
+
+    if (!roleChecked) {
+      console.warn("⚠️ Role not yet checked, please wait...");
+      alert("Please wait, checking your permissions...");
+      return;
+    }
 
     setSending(true);
     try {
-      const messagesRef = collection(db, "EmergencyReports", emergencyReportId, "messages");
-      await addDoc(messagesRef, {
+      const collectionName = dispatchId ? "dispatches" : "EmergencyReports";
+      console.log("📤 Sending message as:", { isAdmin, userDisplayName, userId: user.uid, collection: collectionName, chatId });
+      const messagesRef = collection(db, collectionName, chatId, "messages");
+      
+      const messageData = {
         senderId: user.uid,
-        senderName: user.displayName || user.email || "Admin",
+        senderName: userDisplayName || "Unknown",
         text: inputMessage.trim(),
         timestamp: Timestamp.now(),
         imageUrl: "",
-        isAdmin: true,
-      });
+        isAdmin: isAdmin,
+      };
+      
+      console.log("📦 Message data:", messageData);
+      await addDoc(messagesRef, messageData);
 
+      console.log("✅ Message sent successfully");
       setInputMessage("");
-    } catch (error) {
-      console.error("Error sending message:", error);
-      alert("Failed to send message. Please try again.");
+    } catch (error: any) {
+      console.error("❌ Error sending message:", error);
+      console.error("Error code:", error?.code);
+      console.error("Error message:", error?.message);
+      alert(`Failed to send message: ${error?.message || "Unknown error"}`);
     } finally {
       setSending(false);
+    }
+  };
+
+  const handleResolveEmergency = async () => {
+    if (!emergencyReportId) {
+      console.error("❌ No emergency report ID provided:", { emergencyReportId, dispatchId });
+      alert("Cannot resolve: No emergency report ID. Please close and try again.");
+      return;
+    }
+
+    // Validate the ID is a string and not empty
+    if (typeof emergencyReportId !== 'string' || emergencyReportId.trim() === '') {
+      console.error("❌ Invalid emergency report ID:", emergencyReportId);
+      alert("Cannot resolve: Invalid emergency report ID.");
+      return;
+    }
+
+    const confirmed = confirm(
+      "Are you sure you want to mark this emergency as RESOLVED? This will close the emergency report."
+    );
+
+    if (!confirmed) return;
+
+    setResolving(true);
+    try {
+      console.log("✅ Resolving emergency report:", emergencyReportId);
+      console.log("📍 Document path:", `EmergencyReports/${emergencyReportId}`);
+      
+      const reportRef = doc(db, "EmergencyReports", emergencyReportId);
+      await updateDoc(reportRef, {
+        status: "resolved",
+        resolvedAt: Timestamp.now(),
+        resolvedBy: user?.uid,
+      });
+
+      console.log("✅ Emergency resolved successfully");
+      alert("Emergency marked as RESOLVED successfully!");
+      onClose();
+    } catch (error: any) {
+      console.error("❌ Error resolving emergency:", error);
+      console.error("❌ Error code:", error?.code);
+      console.error("❌ Report ID was:", emergencyReportId);
+      alert(`Failed to resolve emergency: ${error?.message || "Unknown error"}`);
+    } finally {
+      setResolving(false);
     }
   };
 
@@ -129,6 +280,11 @@ export default function TICEmergencyModal({
                     <span className="h-2 w-2 rounded-full bg-red-300 animate-pulse"></span>
                     ACTIVE
                   </span>
+                  {dispatchId && (
+                    <span className="px-2 py-1 bg-blue-500/30 backdrop-blur-sm text-white text-xs font-bold rounded-full border border-white/30">
+                      📡 Dispatch Chat
+                    </span>
+                  )}
                 </div>
                 <h2 className="text-2xl font-black text-white tracking-tight">
                   Emergency Communication
@@ -138,12 +294,27 @@ export default function TICEmergencyModal({
                 </p>
               </div>
             </div>
-            <button
-              onClick={onClose}
-              className="text-white/80 hover:text-white hover:bg-white/20 rounded-xl p-2 transition-all duration-200 hover:rotate-90"
-            >
-              <span className="material-symbols-outlined text-2xl">close</span>
-            </button>
+            <div className="flex items-center gap-2">
+              {emergencyReportId && (
+                <button
+                  onClick={() => {
+                    console.log("🔘 Modal Resolve button clicked. Report ID:", emergencyReportId, "Type:", typeof emergencyReportId);
+                    handleResolveEmergency();
+                  }}
+                  disabled={resolving}
+                  className="flex items-center gap-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white font-bold rounded-xl transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <span className="material-symbols-outlined text-lg">check_circle</span>
+                  {resolving ? "Resolving..." : "Resolve"}
+                </button>
+              )}
+              <button
+                onClick={onClose}
+                className="text-white/80 hover:text-white hover:bg-white/20 rounded-xl p-2 transition-all duration-200 hover:rotate-90"
+              >
+                <span className="material-symbols-outlined text-2xl">close</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -154,9 +325,25 @@ export default function TICEmergencyModal({
               warning
             </span>
             <div className="flex-1">
-              <h3 className="text-sm font-black text-red-900 uppercase tracking-wide mb-1">
-                Critical Situation Alert
-              </h3>
+              <div className="flex items-center justify-between mb-1">
+                <h3 className="text-sm font-black text-red-900 uppercase tracking-wide">
+                  Critical Situation Alert
+                </h3>
+                {/* User Role Indicator */}
+                {roleChecked ? (
+                  <span className={`text-xs font-bold px-3 py-1 rounded-full ${
+                    isAdmin 
+                      ? 'bg-blue-100 text-blue-700 border border-blue-300' 
+                      : 'bg-green-100 text-green-700 border border-green-300'
+                  }`}>
+                    {isAdmin ? '🛡️ Admin' : '👤 Personnel'} • {userDisplayName}
+                  </span>
+                ) : (
+                  <span className="text-xs font-bold px-3 py-1 rounded-full bg-yellow-100 text-yellow-700 border border-yellow-300 animate-pulse">
+                    ⏳ Checking permissions...
+                  </span>
+                )}
+              </div>
               <p className="text-sm text-red-700 font-semibold leading-relaxed">
                 Vehicle <span className="font-black">{truckCodename}</span> has reported an emergency in the field.
                 Personnel requires immediate assistance. Maintain continuous communication.
@@ -231,7 +418,7 @@ export default function TICEmergencyModal({
             </div>
             <button
               type="submit"
-              disabled={!inputMessage.trim() || sending}
+              disabled={!inputMessage.trim() || sending || !roleChecked}
               className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-3.5 text-sm font-bold text-white shadow-lg shadow-blue-500/30 hover:shadow-xl hover:from-blue-500 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:from-blue-600 disabled:hover:to-blue-700 transition-all duration-200 hover:scale-105 active:scale-95"
             >
               {sending ? (
@@ -247,11 +434,20 @@ export default function TICEmergencyModal({
               )}
             </button>
           </div>
-          <div className="flex items-center gap-2 mt-3 px-2">
-            <span className="material-symbols-outlined text-slate-400 text-sm">info</span>
-            <p className="text-xs text-slate-500 font-medium">
-              All communications are encrypted and logged for security purposes.
-            </p>
+          <div className="flex items-center justify-between gap-2 mt-3 px-2">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-slate-400 text-sm">info</span>
+              <p className="text-xs text-slate-500 font-medium">
+                All communications are encrypted and logged for security purposes.
+              </p>
+            </div>
+            {/* Debug Info */}
+            <div className="flex items-center gap-2 text-xs">
+              <span className={`h-2 w-2 rounded-full ${messages.length >= 0 ? 'bg-green-500' : 'bg-gray-400'} animate-pulse`}></span>
+              <span className="text-slate-400 font-mono">
+                {messages.length} msg • {dispatchId ? `Dispatch: ${dispatchId.slice(-6)}` : `Report: ${emergencyReportId?.slice(-6)}`}
+              </span>
+            </div>
           </div>
         </form>
       </div>
