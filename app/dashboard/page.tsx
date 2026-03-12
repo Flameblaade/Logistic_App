@@ -307,6 +307,7 @@ export default function Dashboard() {
         <DispatchDetailModal
           dispatch={selectedDispatch}
           onClose={() => setSelectedDispatch(null)}
+          onSuccess={() => setDispatchRefresh((n) => n + 1)}
         />
       )}
 
