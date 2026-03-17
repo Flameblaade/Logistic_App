@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useAuth } from "@/lib/auth-context";
 import {
     collection,
     doc,
@@ -12,6 +13,7 @@ import {
     serverTimestamp,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { logActivity } from "@/lib/activity-logger";
 import dynamic from "next/dynamic";
 
 // Dynamic import for Leaflet (avoids SSR errors)
@@ -58,6 +60,7 @@ function supplyKey(category: string, item: string) {
 }
 
 export default function DispatchModal({ onClose, onSuccess }: Props) {
+    const { user } = useAuth();
     // Core form state
     const [dispatchId, setDispatchId] = useState("");
     const [lat, setLat] = useState("9.748257");
@@ -625,6 +628,7 @@ export default function DispatchModal({ onClose, onSuccess }: Props) {
         try {
             const counterRef = doc(db, "meta", "dispatchCounter");
             const dispatchRef = doc(collection(db, "dispatches"));
+            let createdDispatchId = "";
 
             await runTransaction(db, async (tx) => {
                 const counterSnap = await tx.get(counterRef);
@@ -633,6 +637,7 @@ export default function DispatchModal({ onClose, onSuccess }: Props) {
                 const year = new Date().getFullYear();
                 const padded = String(newCount).padStart(8, "0");
                 const finalId = `${year}${padded}`;
+                createdDispatchId = finalId;
 
                 tx.set(counterRef, { count: newCount }, { merge: true });
                 tx.set(dispatchRef, {
@@ -657,6 +662,22 @@ export default function DispatchModal({ onClose, onSuccess }: Props) {
                     createdAt: serverTimestamp(),
                 });
             });
+
+            // Log activity
+            if (user?.email) {
+                await logActivity(
+                    "DISPATCH_CREATED",
+                    `Created dispatch ${createdDispatchId}`,
+                    user.email,
+                    {
+                        dispatchId: createdDispatchId,
+                        officer: personnels.trim(),
+                        truck,
+                        location: locationLabel || `${lat}, ${lng}`,
+                        suppliesCount: activeSupplies.length,
+                    }
+                );
+            }
 
             onSuccess();
             onClose();
