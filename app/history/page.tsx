@@ -138,17 +138,40 @@ export default function HistoryPage() {
 
   const handleExportExcel = () => {
     try {
+      const supplyColumns = Array.from(
+        new Set(
+          filteredData.flatMap((record) =>
+            record.supplies.map((supply) => `${supply.category} - ${supply.item}`)
+          )
+        )
+      ).sort((left, right) => left.localeCompare(right));
+
       // Prepare data for export
-      const exportData = filteredData.map((record, index) => ({
-        "No.": index + 1,
-        "Dispatch ID": record.dispatchId,
-        "Vehicle": record.vehicle,
-        "Event": record.event,
-        "Location": record.location,
-        "Officer": record.officer,
-        "Status": record.status,
-        "Timestamp": record.timestamp,
-      }));
+      const exportData = filteredData.map((record, index) => {
+        const supplyData = Object.fromEntries(
+          supplyColumns.map((column) => [column, 0])
+        );
+
+        for (const supply of record.supplies) {
+          const columnName = `${supply.category} - ${supply.item}`;
+          supplyData[columnName] = supply.quantity;
+        }
+
+        return {
+          "No.": index + 1,
+          "Dispatch ID": record.dispatchId,
+          "Vehicle": record.vehicle,
+          "Officer": record.officer,
+          "Personnels": record.personnels || "N/A",
+          "Status": record.status,
+          "Landmark": record.location.label,
+          "Latitude": record.location.lat,
+          "Longitude": record.location.lng,
+          ...supplyData,
+          "Additional Notes": record.othersNote || "N/A",
+          "Timestamp": record.timestamp,
+        };
+      });
 
       // Create a new workbook and worksheet
       const worksheet = XLSX.utils.json_to_sheet(exportData);
@@ -160,10 +183,14 @@ export default function HistoryPage() {
         { wch: 5 },  // No.
         { wch: 15 }, // Dispatch ID
         { wch: 20 }, // Vehicle
-        { wch: 25 }, // Event
-        { wch: 30 }, // Location
         { wch: 30 }, // Officer
+        { wch: 30 }, // Personnels
         { wch: 12 }, // Status
+        { wch: 35 }, // Landmark
+        { wch: 14 }, // Latitude
+        { wch: 14 }, // Longitude
+        ...supplyColumns.map(() => ({ wch: 18 })), // Supply items
+        { wch: 40 }, // Additional Notes
         { wch: 20 }, // Timestamp
       ];
       worksheet['!cols'] = columnWidths;
