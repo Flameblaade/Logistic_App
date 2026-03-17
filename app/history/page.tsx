@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { useState, useEffect } from "react";
 import Image from "next/image";
+import DispatchDetailModal from "@/components/DispatchDetailModal";
 import { db } from "@/lib/firebase";
 import {
   collection,
@@ -17,9 +18,16 @@ import * as XLSX from "xlsx";
 interface HistoryRecord {
   id: string;
   dispatchId: string;
+  personnels: string;
   vehicle: string;
   event: string;
-  location: string;
+  location: {
+    lat: number;
+    lng: number;
+    label: string;
+  };
+  supplies: { category: string; item: string; quantity: number }[];
+  othersNote?: string;
   timestamp: string;
   officer: string;
   status: string;
@@ -34,6 +42,7 @@ export default function HistoryPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [historyData, setHistoryData] = useState<HistoryRecord[]>([]);
   const [fetchLoading, setFetchLoading] = useState(true);
+  const [selectedDispatch, setSelectedDispatch] = useState<HistoryRecord | null>(null);
 
   // Real-time listener for dispatches
   useEffect(() => {
@@ -56,9 +65,16 @@ export default function HistoryPage() {
         return {
           id: d.id,
           dispatchId: data.dispatchId || "N/A",
+          personnels: data.personnels || "",
           vehicle: data.truck || "Unknown",
           event: eventMap[data.status] || data.status || "Update",
-          location: data.location?.label || "Location unknown",
+          location: {
+            lat: data.location?.lat || 0,
+            lng: data.location?.lng || 0,
+            label: data.location?.label || "Location unknown",
+          },
+          supplies: Array.isArray(data.supplies) ? data.supplies : [],
+          othersNote: data.othersNote || "",
           timestamp: createdAt ? createdAt.toDate().toLocaleString("en-PH", {
             month: "short",
             day: "numeric",
@@ -169,12 +185,30 @@ export default function HistoryPage() {
     (r) =>
       r.vehicle.toLowerCase().includes(searchTerm.toLowerCase()) ||
       r.event.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      r.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      r.location.label.toLowerCase().includes(searchTerm.toLowerCase()) ||
       r.officer.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
     <div className="flex h-screen bg-gradient-to-br from-slate-100 to-slate-200">
+      {selectedDispatch && (
+        <DispatchDetailModal
+          dispatch={{
+            id: selectedDispatch.id,
+            dispatchId: selectedDispatch.dispatchId,
+            officer: selectedDispatch.officer,
+            personnels: selectedDispatch.personnels,
+            truck: selectedDispatch.vehicle,
+            status: selectedDispatch.status,
+            location: selectedDispatch.location,
+            supplies: selectedDispatch.supplies,
+            othersNote: selectedDispatch.othersNote,
+            createdAt: selectedDispatch.createdAt,
+          }}
+          onClose={() => setSelectedDispatch(null)}
+        />
+      )}
+
       {/* Sidebar */}
       <div
         className={`${sidebarOpen ? "w-64" : "w-20"
@@ -361,7 +395,7 @@ export default function HistoryPage() {
                         </td>
                         <td className="px-6 py-4 text-sm text-slate-600 flex items-center gap-1.5">
                           <span className="material-symbols-outlined text-slate-400" style={{ fontSize: "0.9rem" }}>location_on</span>
-                          {record.location}
+                          {record.location.label}
                         </td>
                         <td className="px-6 py-4 text-sm text-slate-600">
                           <span className="flex items-center gap-1.5">
@@ -370,7 +404,10 @@ export default function HistoryPage() {
                           </span>
                         </td>
                         <td className="px-6 py-4 text-sm">
-                          <button className="flex items-center gap-1 text-blue-600 hover:text-blue-700 font-semibold transition-colors">
+                          <button
+                            onClick={() => setSelectedDispatch(record)}
+                            className="flex items-center gap-1 text-blue-600 hover:text-blue-700 font-semibold transition-colors"
+                          >
                             <span className="material-symbols-outlined" style={{ fontSize: "1rem" }}>open_in_new</span>
                             Details
                           </button>
