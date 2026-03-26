@@ -49,6 +49,9 @@ fun NavGraph(
                 },
                 onReportDelay = {
                     navController.navigate(Screen.ReportDelay.route)
+                },
+                onExpandMap = {
+                    navController.navigate(Screen.MapFullScreen.route)
                 }
             )
         }
@@ -104,11 +107,20 @@ fun NavGraph(
                     navController.navigate(Screen.Chat.route) {
                         popUpTo(Screen.Emergency.route) { inclusive = true }
                     }
+                },
+                onExpandMap = {
+                    navController.navigate(Screen.MapFullScreen.route)
                 }
             )
         }
         composable(Screen.Chat.route) {
             ChatScreen(
+                authViewModel = authViewModel,
+                onBack = { navController.popBackStack() }
+            )
+        }
+        composable(Screen.MapFullScreen.route) {
+            MapFullScreen(
                 authViewModel = authViewModel,
                 onBack = { navController.popBackStack() }
             )

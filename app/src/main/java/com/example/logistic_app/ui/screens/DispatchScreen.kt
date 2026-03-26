@@ -38,7 +38,8 @@ fun DispatchScreen(
     onConfirmDelivery: () -> Unit,
     onContactSupport: () -> Unit,
     onStopOver: () -> Unit,
-    onReportDelay: () -> Unit
+    onReportDelay: () -> Unit,
+    onExpandMap: () -> Unit
 ) {
     val user by authViewModel.user.collectAsState()
     val personnel by authViewModel.personnel.collectAsState()
@@ -54,7 +55,6 @@ fun DispatchScreen(
         )
     }
 
-    // State to trigger map snapping to user location
     var snapTrigger by remember { mutableIntStateOf(0) }
 
     val launcher = rememberLauncherForActivityResult(
@@ -114,7 +114,6 @@ fun DispatchScreen(
                 }
                 Spacer(modifier = Modifier.weight(1f))
                 
-                // Chat button only visible when there is an active dispatch AND it is accepted
                 if (activeDispatch != null && activeDispatch?.status != "Pending") {
                     IconButton(
                         onClick = onContactSupport,
@@ -127,10 +126,7 @@ fun DispatchScreen(
                 }
 
                 IconButton(
-                    onClick = {
-                        // Increment trigger to snap map to user location
-                        snapTrigger++
-                    },
+                    onClick = { snapTrigger++ },
                     modifier = Modifier
                         .background(NavyBlue.copy(alpha = 0.1f), CircleShape)
                 ) {
@@ -140,7 +136,6 @@ fun DispatchScreen(
         }
 
         if (activeDispatch == null) {
-            // Empty State: Show Map only
             Text(
                 "NO ACTIVE DISPATCH",
                 fontSize = 12.sp,
@@ -152,23 +147,23 @@ fun DispatchScreen(
                 modifier = Modifier.weight(1f),
                 text = "Waiting for admin dispatch...",
                 showUserLocation = hasLocationPermission,
-                snapToUserLocation = snapTrigger
+                snapToUserLocation = snapTrigger,
+                onMapClick = onExpandMap
             )
         } else if (activeDispatch?.status == "Pending") {
-            // Confirmation State
             DispatchConfirmation(
                 dispatch = activeDispatch!!,
                 onAccept = { authViewModel.updateDispatchStatus("Ongoing") }
             )
         } else {
-            // Ongoing Dispatch Info
             ActiveDispatchContent(
                 dispatch = activeDispatch!!,
                 onConfirmDelivery = onConfirmDelivery,
                 onStopOver = onStopOver,
                 onReportDelay = onReportDelay,
                 hasLocationPermission = hasLocationPermission,
-                snapTrigger = snapTrigger
+                snapTrigger = snapTrigger,
+                onExpandMap = onExpandMap
             )
         }
     }
@@ -179,7 +174,6 @@ fun DispatchConfirmation(
     dispatch: Dispatch,
     onAccept: () -> Unit
 ) {
-    // ... (rest of the component remains the same)
     Column(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.Center,
@@ -264,7 +258,8 @@ fun ColumnScope.ActiveDispatchContent(
     onStopOver: () -> Unit,
     onReportDelay: () -> Unit,
     hasLocationPermission: Boolean,
-    snapTrigger: Int
+    snapTrigger: Int,
+    onExpandMap: () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -382,7 +377,8 @@ fun ColumnScope.ActiveDispatchContent(
         latitude = dispatch.location.lat,
         longitude = dispatch.location.lng,
         showUserLocation = hasLocationPermission,
-        snapToUserLocation = snapTrigger
+        snapToUserLocation = snapTrigger,
+        onMapClick = onExpandMap
     )
 }
 

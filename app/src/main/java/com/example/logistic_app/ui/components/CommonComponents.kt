@@ -30,10 +30,15 @@ import androidx.lifecycle.LifecycleEventObserver
 import coil.compose.rememberAsyncImagePainter
 import com.example.logistic_app.R
 import com.example.logistic_app.ui.theme.*
+import org.osmdroid.events.MapEventsReceiver
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
+import org.osmdroid.views.overlay.MapEventsOverlay
 import org.osmdroid.views.overlay.Marker
+import org.osmdroid.views.overlay.compass.CompassOverlay
+import org.osmdroid.views.overlay.compass.InternalCompassOrientationProvider
+import org.osmdroid.views.overlay.gestures.RotationGestureOverlay
 import org.osmdroid.views.overlay.mylocation.GpsMyLocationProvider
 import org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay
 
@@ -54,7 +59,8 @@ fun MapPlaceholder(
     latitude: Double = 14.5995, // Default to Manila
     longitude: Double = 120.9842,
     showUserLocation: Boolean = false,
-    snapToUserLocation: Int = 0 // Using an Int as a trigger to recenter
+    snapToUserLocation: Int = 0,
+    onMapClick: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val mapView = remember { MapView(context) }
@@ -64,6 +70,40 @@ fun MapPlaceholder(
     val locationOverlay = remember(mapView) {
         MyLocationNewOverlay(GpsMyLocationProvider(context), mapView).apply {
             enableMyLocation()
+            setDrawAccuracyEnabled(true)
+        }
+    }
+
+    // Set up compass overlay
+    val compassOverlay = remember(mapView) {
+        CompassOverlay(context, InternalCompassOrientationProvider(context), mapView).apply {
+            enableCompass()
+        }
+    }
+
+    // Set up rotation overlay
+    val rotationOverlay = remember(mapView) {
+        RotationGestureOverlay(mapView).apply {
+            isEnabled = true
+        }
+    }
+
+    // Set up click listener overlay
+    val eventsOverlay = remember(onMapClick) {
+        MapEventsOverlay(object : MapEventsReceiver {
+            override fun singleTapConfirmedHelper(p: GeoPoint?): Boolean {
+                onMapClick?.invoke()
+                return true
+            }
+            override fun longPressHelper(p: GeoPoint?): Boolean = false
+        })
+    }
+
+    // Marker for destination
+    val destinationMarker = remember(mapView) {
+        Marker(mapView).apply {
+            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+            // Use default marker icon or a specific one if available
         }
     }
 
@@ -73,7 +113,18 @@ fun MapPlaceholder(
             val myLocation = locationOverlay.myLocation
             if (myLocation != null) {
                 mapView.controller.animateTo(myLocation)
-                mapView.controller.setZoom(17.0)
+                mapView.controller.setZoom(18.0)
+            } else {
+                // If location not yet found, wait for first fix
+                locationOverlay.runOnFirstFix {
+                    val location = locationOverlay.myLocation
+                    if (location != null) {
+                        mapView.post {
+                            mapView.controller.animateTo(location)
+                            mapView.controller.setZoom(18.0)
+                        }
+                    }
+                }
             }
         }
     }
@@ -84,11 +135,15 @@ fun MapPlaceholder(
             when (event) {
                 Lifecycle.Event.ON_RESUME -> {
                     mapView.onResume()
-                    if (showUserLocation) locationOverlay.enableMyLocation()
+                    if (showUserLocation) {
+                        locationOverlay.enableMyLocation()
+                    }
+                    compassOverlay.enableCompass()
                 }
                 Lifecycle.Event.ON_PAUSE -> {
                     mapView.onPause()
                     locationOverlay.disableMyLocation()
+                    compassOverlay.disableCompass()
                 }
                 else -> {}
             }
@@ -104,7 +159,10 @@ fun MapPlaceholder(
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
             .background(Color(0xFFECEFF1))
-            .border(1.dp, Color(0xFFCFD8DC), RoundedCornerShape(16.dp)),
+            .border(1.dp, Color(0xFFCFD8DC), RoundedCornerShape(16.dp))
+            .let { 
+                if (onMapClick != null) it.clickable { onMapClick() } else it
+            },
         contentAlignment = Alignment.Center
     ) {
         AndroidView(
@@ -114,21 +172,27 @@ fun MapPlaceholder(
                     setMultiTouchControls(true)
                     controller.setZoom(15.0)
                     controller.setCenter(GeoPoint(latitude, longitude))
-                    
+
+                    overlays.add(compassOverlay)
+                    overlays.add(rotationOverlay)
+
                     if (showUserLocation) {
                         overlays.add(locationOverlay)
                     }
 
-                    // Add a marker for the destination
-                    val destinationMarker = Marker(this)
-                    destinationMarker.position = GeoPoint(latitude, longitude)
-                    destinationMarker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                    destinationMarker.title = text
+                    if (onMapClick != null) {
+                        overlays.add(eventsOverlay)
+                    }
+                    
+                    // Add the destination marker
                     overlays.add(destinationMarker)
                 }
             },
             update = { view ->
-                // Only update center if we aren't snapping to user
+                // Update marker position and text
+                destinationMarker.position = GeoPoint(latitude, longitude)
+                destinationMarker.title = text
+
                 if (snapToUserLocation == 0) {
                     view.controller.setCenter(GeoPoint(latitude, longitude))
                 }
@@ -170,7 +234,6 @@ fun PhotoUploadBox(
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop
             )
-            // Overlay to show it's still clickable
             Box(
                 modifier = Modifier
                     .fillMaxSize()

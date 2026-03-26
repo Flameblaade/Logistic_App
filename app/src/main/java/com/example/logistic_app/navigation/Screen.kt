@@ -9,4 +9,5 @@ sealed class Screen(val route: String) {
     object Chat : Screen("chat")
     object StopOver : Screen("stop_over")
     object ReportDelay : Screen("report_delay")
+    object MapFullScreen : Screen("map_full_screen")
 }
