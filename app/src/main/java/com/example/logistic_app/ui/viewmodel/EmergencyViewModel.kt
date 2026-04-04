@@ -38,6 +38,11 @@ class EmergencyViewModel : ViewModel() {
     var error by mutableStateOf<String?>(null)
         private set
 
+    // New location state
+    var selectedLat by mutableStateOf(9.7489) // Default mock
+    var selectedLng by mutableStateOf(118.7471) // Default mock
+    var selectedLabel by mutableStateOf("Detected Location")
+
     fun onTypeSelected(type: String) {
         selectedType = type
         currentStep = EmergencyStep.DETAILS
@@ -49,6 +54,12 @@ class EmergencyViewModel : ViewModel() {
 
     fun onImageSelected(uri: Uri?) {
         selectedImageUri = uri
+    }
+
+    fun onLocationConfirmed(lat: Double, lng: Double, label: String) {
+        selectedLat = lat
+        selectedLng = lng
+        selectedLabel = label
     }
 
     fun onBack() {
@@ -81,18 +92,12 @@ class EmergencyViewModel : ViewModel() {
                     uploadedImageUrl = CloudinaryHelper.uploadImage(it)
                 }
 
-                // 2. Mock GPS Data
-                // TODO: Integrate FusedLocationProviderClient here to get real-time GPS
-                val mockLat = 9.7489
-                val mockLng = 118.7471
-                val mockLabel = "PPC-NORTH-HQ"
-
                 val report = EmergencyReport(
                     dispatchId = dispatchId,
                     type = selectedType,
                     description = description,
                     imageUrl = uploadedImageUrl,
-                    location = EmergencyLocation(mockLat, mockLng, mockLabel),
+                    location = EmergencyLocation(selectedLat, selectedLng, selectedLabel),
                     reportedBy = userName,
                     timestamp = Timestamp.now()
                 )
@@ -103,7 +108,7 @@ class EmergencyViewModel : ViewModel() {
                 // 4. Send summary to Support Chat
                 val summaryText = """
                     🚨 EMERGENCY REPORTED: $selectedType
-                    Location: $mockLabel ($mockLat, $mockLng)
+                    Location: $selectedLabel ($selectedLat, $selectedLng)
                     Description: ${if (description.isBlank()) "No details provided." else description}
                 """.trimIndent()
 
@@ -139,5 +144,9 @@ class EmergencyViewModel : ViewModel() {
         selectedImageUri = null
         error = null
         isLoading = false
+        // Reset location to mock or handle properly in production
+        selectedLat = 9.7489
+        selectedLng = 118.7471
+        selectedLabel = "Detected Location"
     }
 }

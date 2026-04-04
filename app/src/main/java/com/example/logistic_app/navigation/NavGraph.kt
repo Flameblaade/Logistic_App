@@ -5,8 +5,10 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.navArgument
 import com.example.logistic_app.ui.screens.*
 import com.example.logistic_app.ui.viewmodel.AuthViewModel
 import com.example.logistic_app.ui.viewmodel.EmergencyViewModel
@@ -51,7 +53,7 @@ fun NavGraph(
                     navController.navigate(Screen.ReportDelay.route)
                 },
                 onExpandMap = {
-                    navController.navigate(Screen.MapFullScreen.route)
+                    navController.navigate(Screen.MapFullScreen.createRoute(false))
                 }
             )
         }
@@ -109,7 +111,7 @@ fun NavGraph(
                     }
                 },
                 onExpandMap = {
-                    navController.navigate(Screen.MapFullScreen.route)
+                    navController.navigate(Screen.MapFullScreen.createRoute(true))
                 }
             )
         }
@@ -119,9 +121,15 @@ fun NavGraph(
                 onBack = { navController.popBackStack() }
             )
         }
-        composable(Screen.MapFullScreen.route) {
+        composable(
+            route = Screen.MapFullScreen.route,
+            arguments = listOf(navArgument("isPicking") { type = NavType.BoolType })
+        ) { backStackEntry ->
+            val isPicking = backStackEntry.arguments?.getBoolean("isPicking") ?: false
             MapFullScreen(
                 authViewModel = authViewModel,
+                emergencyViewModel = emergencyViewModel,
+                isPicking = isPicking,
                 onBack = { navController.popBackStack() }
             )
         }

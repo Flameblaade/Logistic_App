@@ -1,5 +1,7 @@
 package com.example.logistic_app.ui.components
 
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffColorFilter
 import android.net.Uri
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -31,6 +33,9 @@ import coil.compose.rememberAsyncImagePainter
 import com.example.logistic_app.R
 import com.example.logistic_app.ui.theme.*
 import org.osmdroid.events.MapEventsReceiver
+import org.osmdroid.events.MapListener
+import org.osmdroid.events.ScrollEvent
+import org.osmdroid.events.ZoomEvent
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
@@ -60,7 +65,11 @@ fun MapPlaceholder(
     longitude: Double = 120.9842,
     showUserLocation: Boolean = false,
     snapToUserLocation: Int = 0,
-    onMapClick: (() -> Unit)? = null
+    useRedMarker: Boolean = false,
+    onMapClick: (() -> Unit)? = null,
+    onMapClickWithPoint: ((GeoPoint) -> Unit)? = null,
+    onLongClick: ((GeoPoint) -> Unit)? = null,
+    onCenterChanged: ((GeoPoint) -> Unit)? = null
 ) {
     val context = LocalContext.current
     val mapView = remember { MapView(context) }
@@ -89,13 +98,22 @@ fun MapPlaceholder(
     }
 
     // Set up click listener overlay
-    val eventsOverlay = remember(onMapClick) {
+    val eventsOverlay = remember(onMapClick, onMapClickWithPoint, onLongClick) {
         MapEventsOverlay(object : MapEventsReceiver {
             override fun singleTapConfirmedHelper(p: GeoPoint?): Boolean {
+                if (p != null && onMapClickWithPoint != null) {
+                    onMapClickWithPoint.invoke(p)
+                    return true
+                }
                 onMapClick?.invoke()
                 return true
             }
-            override fun longPressHelper(p: GeoPoint?): Boolean = false
+            override fun longPressHelper(p: GeoPoint?): Boolean {
+                if (p != null) {
+                    onLongClick?.invoke(p)
+                }
+                return true
+            }
         })
     }
 
@@ -103,7 +121,6 @@ fun MapPlaceholder(
     val destinationMarker = remember(mapView) {
         Marker(mapView).apply {
             setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-            // Use default marker icon or a specific one if available
         }
     }
 
@@ -161,7 +178,7 @@ fun MapPlaceholder(
             .background(Color(0xFFECEFF1))
             .border(1.dp, Color(0xFFCFD8DC), RoundedCornerShape(16.dp))
             .let { 
-                if (onMapClick != null) it.clickable { onMapClick() } else it
+                if (onMapClick != null && onMapClickWithPoint == null) it.clickable { onMapClick() } else it
             },
         contentAlignment = Alignment.Center
     ) {
@@ -180,18 +197,36 @@ fun MapPlaceholder(
                         overlays.add(locationOverlay)
                     }
 
-                    if (onMapClick != null) {
-                        overlays.add(eventsOverlay)
-                    }
+                    overlays.add(eventsOverlay)
                     
                     // Add the destination marker
-                    overlays.add(destinationMarker)
+                    if (onCenterChanged == null) {
+                        overlays.add(destinationMarker)
+                    }
+
+                    addMapListener(object : MapListener {
+                        override fun onScroll(event: ScrollEvent?): Boolean {
+                            event?.source?.let { view ->
+                                onCenterChanged?.invoke(view.mapCenter as GeoPoint)
+                            }
+                            return true
+                        }
+                        override fun onZoom(event: ZoomEvent?): Boolean = true
+                    })
                 }
             },
             update = { view ->
                 // Update marker position and text
                 destinationMarker.position = GeoPoint(latitude, longitude)
                 destinationMarker.title = text
+                
+                if (useRedMarker) {
+                    val redIcon = context.getDrawable(org.osmdroid.library.R.drawable.marker_default)?.mutate()
+                    redIcon?.colorFilter = PorterDuffColorFilter(android.graphics.Color.RED, PorterDuff.Mode.SRC_IN)
+                    destinationMarker.icon = redIcon
+                } else {
+                    destinationMarker.icon = context.getDrawable(org.osmdroid.library.R.drawable.marker_default)
+                }
 
                 if (snapToUserLocation == 0) {
                     view.controller.setCenter(GeoPoint(latitude, longitude))

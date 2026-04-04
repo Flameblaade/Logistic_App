@@ -9,5 +9,7 @@ sealed class Screen(val route: String) {
     object Chat : Screen("chat")
     object StopOver : Screen("stop_over")
     object ReportDelay : Screen("report_delay")
-    object MapFullScreen : Screen("map_full_screen")
+    object MapFullScreen : Screen("map_full_screen/{isPicking}") {
+        fun createRoute(isPicking: Boolean) = "map_full_screen/$isPicking"
+    }
 }

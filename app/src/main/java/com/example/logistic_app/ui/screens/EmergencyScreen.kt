@@ -150,7 +150,10 @@ fun EmergencyScreen(
                             errorMessage = emergencyViewModel.error,
                             selectedImageUri = emergencyViewModel.selectedImageUri,
                             onUploadClick = { showOptions = true },
-                            onExpandMap = onExpandMap
+                            onExpandMap = onExpandMap,
+                            selectedLat = emergencyViewModel.selectedLat,
+                            selectedLng = emergencyViewModel.selectedLng,
+                            selectedLabel = emergencyViewModel.selectedLabel
                         )
                     }
                     EmergencyStep.SUCCESS -> {
@@ -290,7 +293,10 @@ fun EmergencyDetails(
     errorMessage: String?,
     selectedImageUri: android.net.Uri?,
     onUploadClick: () -> Unit,
-    onExpandMap: () -> Unit
+    onExpandMap: () -> Unit,
+    selectedLat: Double,
+    selectedLng: Double,
+    selectedLabel: String
 ) {
     val isTic = type == "T.I.C."
     var snapTrigger by remember { mutableIntStateOf(1) } // Initial snap on open
@@ -338,14 +344,24 @@ fun EmergencyDetails(
 
                 Spacer(modifier = Modifier.height(12.dp))
                 
-                Text("Detected Location (Auto-Detect)", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextSecondary)
+                Text("Detected Location", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextSecondary)
                 Spacer(modifier = Modifier.height(6.dp))
                 MapPlaceholder(
                     modifier = Modifier.height(120.dp), 
-                    text = "Current Location",
+                    text = selectedLabel,
+                    latitude = selectedLat,
+                    longitude = selectedLng,
                     showUserLocation = true,
                     snapToUserLocation = snapTrigger,
+                    useRedMarker = true,
                     onMapClick = onExpandMap
+                )
+                Text(
+                    "Note: To choose a different pinpoint, open the map and long-press on your target location.",
+                    fontSize = 10.sp,
+                    color = TextSecondary,
+                    lineHeight = 14.sp,
+                    modifier = Modifier.padding(top = 4.dp, start = 4.dp)
                 )
                 
                 Spacer(modifier = Modifier.height(16.dp))
