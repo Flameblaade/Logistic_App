@@ -1,0 +1,32 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Truck Trailer -->
+    <path
+        android:fillColor="#1A1C3D"
+        android:pathData="M3,5h13v11h-13z" />
+    <!-- Truck Cabin -->
+    <path
+        android:fillColor="#2563EB"
+        android:pathData="M16,8h3l2,3v5h-5z" />
+    <!-- Windshield -->
+    <path
+        android:fillColor="#93C5FD"
+        android:pathData="M17,9h2l1,2h-3z" />
+    <!-- Wheels -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="M5,15m-2,0a2,2 0 1,1 4,0a2,2 0 1,1 -4,0" />
+    <path
+        android:fillColor="#000000"
+        android:pathData="M12,15m-2,0a2,2 0 1,1 4,0a2,2 0 1,1 -4,0" />
+    <path
+        android:fillColor="#000000"
+        android:pathData="M19,15m-2,0a2,2 0 1,1 4,0a2,2 0 1,1 -4,0" />
+    <!-- Details -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M4,6h11v1h-11z" />
+</vector>

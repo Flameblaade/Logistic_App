@@ -47,7 +47,9 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.compose.material.icons.extended)
+    implementation(libs.androidx.compose.ui.text.google.fonts)
     
+
     // Splash Screen
     implementation(libs.androidx.core.splashscreen)
     

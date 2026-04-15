@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -12,7 +13,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Chat
 import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.rounded.LocalShipping
 import androidx.compose.material.icons.rounded.MyLocation
 import androidx.compose.material.icons.rounded.Navigation
 import androidx.compose.material3.*
@@ -21,12 +21,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import com.example.logistic_app.R
 import com.example.logistic_app.data.model.Dispatch
 import com.example.logistic_app.ui.components.MapPlaceholder
 import com.example.logistic_app.ui.theme.*
@@ -96,20 +99,20 @@ fun DispatchScreen(
                         .background(NavyBlue),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(initials, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Text(initials, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
                 }
                 Spacer(modifier = Modifier.width(12.dp))
                 Column {
                     Text(
                         displayName,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 15.sp,
                         color = TextPrimary
                     )
                     Text(
                         "${personnel?.rank ?: "Active Driver"} • ${personnel?.username ?: user?.uid?.take(7)?.uppercase() ?: "DRV-001"}",
                         color = TextSecondary,
-                        fontSize = 13.sp
+                        fontSize = 12.sp
                     )
                 }
                 Spacer(modifier = Modifier.weight(1f))
@@ -138,8 +141,8 @@ fun DispatchScreen(
         if (activeDispatch == null) {
             Text(
                 "NO ACTIVE DISPATCH",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
                 color = TextSecondary,
                 modifier = Modifier.padding(bottom = 8.dp, start = 4.dp)
             )
@@ -174,66 +177,78 @@ fun DispatchConfirmation(
     dispatch: Dispatch,
     onAccept: () -> Unit
 ) {
-    Column(
+    Box(
         modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
+        contentAlignment = Alignment.Center
     ) {
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(24.dp),
+            shape = RoundedCornerShape(28.dp),
             colors = CardDefaults.cardColors(containerColor = SurfaceWhite),
-            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
         ) {
             Column(
-                modifier = Modifier.padding(24.dp),
+                modifier = Modifier.padding(32.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Surface(
-                    modifier = Modifier.size(64.dp),
+                    modifier = Modifier.size(80.dp),
                     shape = CircleShape,
-                    color = OngoingBlueLight
+                    color = OngoingBlue.copy(alpha = 0.1f)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
-                        Icon(Icons.Rounded.LocalShipping, contentDescription = null, tint = OngoingBlue, modifier = Modifier.size(32.dp))
+                        Image(
+                            painter = painterResource(id = R.drawable.ic_truck), 
+                            contentDescription = null, 
+                            colorFilter = ColorFilter.tint(OngoingBlue),
+                            modifier = Modifier.size(44.dp)
+                        )
                     }
                 }
                 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(24.dp))
                 
                 Text(
-                    "New Dispatch Assigned",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
+                    "New Dispatch",
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.SemiBold,
                     color = TextPrimary
                 )
                 
                 Text(
-                    "Dispatch ID: ${dispatch.dispatchId}",
-                    fontSize = 14.sp,
-                    color = TextSecondary,
-                    modifier = Modifier.padding(top = 4.dp)
+                    "ID: ${dispatch.dispatchId}",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = OngoingBlue,
+                    modifier = Modifier
+                        .background(OngoingBlue.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
+                        .padding(horizontal = 12.dp, vertical = 4.dp)
+                        .padding(top = 8.dp)
                 )
-                
-                Spacer(modifier = Modifier.height(24.dp))
-                
-                Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    InfoRow(label = "Destination", value = dispatch.location.label)
-                    InfoRow(label = "Truck", value = dispatch.truck)
-                    InfoRow(label = "Supplies", value = "${dispatch.supplies.size} items listed")
-                }
                 
                 Spacer(modifier = Modifier.height(32.dp))
                 
+                Column(
+                    modifier = Modifier.fillMaxWidth(), 
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    ModernInfoRow(label = "Target Destination", value = dispatch.location.label)
+                    ModernInfoRow(label = "Assigned Truck", value = dispatch.truck)
+                    ModernInfoRow(label = "Payload", value = "${dispatch.supplies.size} Item(s)")
+                }
+                
+                Spacer(modifier = Modifier.height(40.dp))
+                
                 Button(
                     onClick = onAccept,
-                    modifier = Modifier.fillMaxWidth().height(56.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = NavyBlue)
+                    modifier = Modifier.fillMaxWidth().height(60.dp),
+                    shape = RoundedCornerShape(18.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = NavyBlue),
+                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
                 ) {
                     Icon(Icons.Rounded.CheckCircle, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("ACCEPT DISPATCH", fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text("ACCEPT DISPATCH", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
                 }
             }
         }
@@ -241,13 +256,16 @@ fun DispatchConfirmation(
 }
 
 @Composable
-fun InfoRow(label: String, value: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(label, color = TextSecondary, fontSize = 13.sp)
-        Text(value, color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp, textAlign = TextAlign.End)
+fun ModernInfoRow(label: String, value: String) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(label, color = TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+        Text(
+            value, 
+            color = TextPrimary, 
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 15.sp,
+            modifier = Modifier.padding(top = 2.dp)
+        )
     }
 }
 
@@ -280,10 +298,10 @@ fun ColumnScope.ActiveDispatchContent(
                         color = OngoingBlueLight
                     ) {
                         Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                Icons.Rounded.LocalShipping,
+                            Image(
+                                painter = painterResource(id = R.drawable.ic_truck),
                                 contentDescription = null,
-                                tint = OngoingBlue,
+                                colorFilter = ColorFilter.tint(OngoingBlue),
                                 modifier = Modifier.size(18.dp)
                             )
                         }
@@ -291,8 +309,8 @@ fun ColumnScope.ActiveDispatchContent(
                     Spacer(modifier = Modifier.width(10.dp))
                     Text(
                         "Current Dispatch",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 15.sp,
                         color = TextPrimary
                     )
                 }
@@ -303,8 +321,8 @@ fun ColumnScope.ActiveDispatchContent(
                     Text(
                         dispatch.status.uppercase(),
                         color = Color.White,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Black,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                     )
                 }
@@ -314,12 +332,12 @@ fun ColumnScope.ActiveDispatchContent(
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Column {
-                    Text("Dispatch ID", color = TextSecondary, fontSize = 12.sp)
-                    Text(dispatch.dispatchId, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextPrimary)
+                    Text("Dispatch ID", color = TextSecondary, fontSize = 11.sp)
+                    Text(dispatch.dispatchId, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = TextPrimary)
                 }
                 Column(horizontalAlignment = Alignment.End) {
-                    Text("Truck Unit", color = TextSecondary, fontSize = 12.sp)
-                    Text(dispatch.truck, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextPrimary)
+                    Text("Truck Unit", color = TextSecondary, fontSize = 11.sp)
+                    Text(dispatch.truck, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = TextPrimary)
                 }
             }
 
@@ -338,8 +356,8 @@ fun ColumnScope.ActiveDispatchContent(
                 )
                 EnhancedActionChip(
                     label = "Stop Over",
-                    color = StopOverYellow,
-                    bgColor = StopOverYellowLight,
+                    color = EmergencyRed,
+                    bgColor = EmergencyRedLight,
                     onClick = onStopOver,
                     modifier = Modifier.weight(1f)
                 )
@@ -347,8 +365,8 @@ fun ColumnScope.ActiveDispatchContent(
             Spacer(modifier = Modifier.height(8.dp))
             EnhancedActionChip(
                 label = "Report Delay",
-                color = ReportedOrange,
-                bgColor = ReportedOrangeLight,
+                color = StopOverYellow,
+                bgColor = StopOverYellowLight,
                 onClick = onReportDelay,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -364,11 +382,11 @@ fun ColumnScope.ActiveDispatchContent(
         Icon(
             imageVector = Icons.Rounded.Navigation,
             contentDescription = null,
-            modifier = Modifier.size(16.dp),
+            modifier = Modifier.size(14.dp),
             tint = TextSecondary
         )
         Spacer(modifier = Modifier.width(6.dp))
-        Text("TARGET: ${dispatch.location.label.uppercase()}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextSecondary)
+        Text("TARGET: ${dispatch.location.label.uppercase()}", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = TextSecondary)
     }
 
     MapPlaceholder(
@@ -413,8 +431,8 @@ fun EnhancedActionChip(
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     label,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
                     color = color
                 )
             }

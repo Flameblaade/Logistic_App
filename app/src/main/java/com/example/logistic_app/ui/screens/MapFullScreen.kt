@@ -46,6 +46,13 @@ fun MapFullScreen(
     val defaultLat = 14.5995
     val defaultLng = 120.9842
 
+    // Automatically trigger snap to user location on launch if not in picking mode
+    LaunchedEffect(Unit) {
+        if (!isPicking) {
+            snapTrigger++
+        }
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         MapPlaceholder(
             modifier = Modifier.fillMaxSize(),
@@ -81,7 +88,7 @@ fun MapFullScreen(
                 Text(
                     text = if (isPicking) "Adjust Emergency Pinpoint" else (activeDispatch?.location?.label ?: "Map View"),
                     fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.SemiBold,
                     color = TextPrimary,
                     modifier = Modifier.padding(start = 8.dp)
                 )
@@ -132,7 +139,7 @@ fun MapFullScreen(
             ) {
                 Icon(Icons.Rounded.Check, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("CONFIRM THIS POINT", fontWeight = FontWeight.Bold)
+                Text("CONFIRM THIS POINT", fontWeight = FontWeight.SemiBold)
             }
             
             // Small hint

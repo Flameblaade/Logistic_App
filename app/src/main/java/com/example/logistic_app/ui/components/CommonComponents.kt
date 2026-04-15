@@ -1,5 +1,7 @@
 package com.example.logistic_app.ui.components
 
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffColorFilter
 import android.net.Uri
@@ -27,6 +29,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import coil.compose.rememberAsyncImagePainter
@@ -80,6 +83,21 @@ fun MapPlaceholder(
         MyLocationNewOverlay(GpsMyLocationProvider(context), mapView).apply {
             enableMyLocation()
             setDrawAccuracyEnabled(true)
+            
+            // Custom truck icon for user location
+            val truckDrawable = ContextCompat.getDrawable(context, R.drawable.ic_truck)
+            truckDrawable?.let { drawable ->
+                val bitmap = Bitmap.createBitmap(
+                    drawable.intrinsicWidth,
+                    drawable.intrinsicHeight,
+                    Bitmap.Config.ARGB_8888
+                )
+                val canvas = Canvas(bitmap)
+                drawable.setBounds(0, 0, canvas.width, canvas.height)
+                drawable.draw(canvas)
+                setPersonIcon(bitmap)
+                setDirectionIcon(bitmap)
+            }
         }
     }
 
