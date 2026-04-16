@@ -61,7 +61,9 @@ fun MapFullScreen(
             longitude = if (isPicking) pickedLocation.longitude else (activeDispatch?.location?.lng ?: defaultLng),
             showUserLocation = true,
             snapToUserLocation = snapTrigger,
-            useRedMarker = !isPicking, // Only use red marker if NOT in picking mode (since picking has fixed center icon)
+            useRedMarker = !isPicking,
+            dispatcherLat = if (!isPicking) 14.5888 else null, // Example static Lat for Dispatcher
+            dispatcherLng = if (!isPicking) 121.0567 else null, // Example static Lng for Dispatcher
             onMapClick = null,
             onCenterChanged = if (isPicking) { newCenter ->
                 pickedLocation = newCenter
@@ -112,7 +114,7 @@ fun MapFullScreen(
                     Image(
                         imageVector = Icons.Rounded.LocationOn,
                         contentDescription = null,
-                        modifier = Modifier.size(48.dp).offset(y = (-24).dp), // Offset to align tip with center
+                        modifier = Modifier.size(48.dp).offset(y = (-24).dp),
                         colorFilter = ColorFilter.tint(Color.Red)
                     )
                 }

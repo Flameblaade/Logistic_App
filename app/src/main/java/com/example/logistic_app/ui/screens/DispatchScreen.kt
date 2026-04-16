@@ -106,7 +106,7 @@ fun DispatchScreen(
                     Text(
                         displayName,
                         fontWeight = FontWeight.SemiBold,
-                        fontSize = 15.sp,
+                        fontSize = 20.sp,
                         color = TextPrimary
                     )
                     Text(
@@ -198,8 +198,8 @@ fun DispatchConfirmation(
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Image(
-                            painter = painterResource(id = R.drawable.ic_truck), 
-                            contentDescription = null, 
+                            painter = painterResource(id = R.drawable.ic_truck),
+                            contentDescription = null,
                             colorFilter = ColorFilter.tint(OngoingBlue),
                             modifier = Modifier.size(44.dp)
                         )
@@ -207,7 +207,7 @@ fun DispatchConfirmation(
                 }
                 
                 Spacer(modifier = Modifier.height(24.dp))
-                
+
                 Text(
                     "New Dispatch",
                     fontSize = 22.sp,
@@ -396,7 +396,9 @@ fun ColumnScope.ActiveDispatchContent(
         longitude = dispatch.location.lng,
         showUserLocation = hasLocationPermission,
         snapToUserLocation = snapTrigger,
-        onMapClick = onExpandMap
+        onMapClick = onExpandMap,
+        dispatcherLat = 14.5888, // Dispatcher Location
+        dispatcherLng = 121.0567
     )
 }
 

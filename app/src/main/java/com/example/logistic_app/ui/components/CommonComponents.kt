@@ -41,6 +41,7 @@ import org.osmdroid.events.ScrollEvent
 import org.osmdroid.events.ZoomEvent
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
+import org.osmdroid.util.BoundingBox
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.MapEventsOverlay
 import org.osmdroid.views.overlay.Marker
@@ -69,6 +70,8 @@ fun MapPlaceholder(
     showUserLocation: Boolean = false,
     snapToUserLocation: Int = 0,
     useRedMarker: Boolean = false,
+    dispatcherLat: Double? = null,
+    dispatcherLng: Double? = null,
     onMapClick: (() -> Unit)? = null,
     onMapClickWithPoint: ((GeoPoint) -> Unit)? = null,
     onLongClick: ((GeoPoint) -> Unit)? = null,
@@ -142,7 +145,7 @@ fun MapPlaceholder(
         }
     }
 
-    // Snap to user location trigger
+    // Snap to user location trigger - ONLY when snapToUserLocation changes (e.g. button click)
     LaunchedEffect(snapToUserLocation) {
         if (snapToUserLocation > 0 && showUserLocation) {
             val myLocation = locationOverlay.myLocation
@@ -150,7 +153,6 @@ fun MapPlaceholder(
                 mapView.controller.animateTo(myLocation)
                 mapView.controller.setZoom(18.0)
             } else {
-                // If location not yet found, wait for first fix
                 locationOverlay.runOnFirstFix {
                     val location = locationOverlay.myLocation
                     if (location != null) {
@@ -159,6 +161,29 @@ fun MapPlaceholder(
                             mapView.controller.setZoom(18.0)
                         }
                     }
+                }
+            }
+        }
+    }
+
+    // Fit ALL points in view initially (Truck and Destination Pinpoint)
+    LaunchedEffect(latitude, longitude, showUserLocation) {
+        locationOverlay.runOnFirstFix {
+            val userLoc = locationOverlay.myLocation
+            mapView.post {
+                val points = mutableListOf<GeoPoint>()
+                points.add(GeoPoint(latitude, longitude)) // Delivery pinpoint
+                if (userLoc != null) {
+                    points.add(userLoc) // User/Truck
+                }
+
+                if (points.size >= 2) {
+                    val box = BoundingBox.fromGeoPoints(points)
+                    // Increase scale slightly to add padding around markers
+                    mapView.zoomToBoundingBox(box.increaseByScale(1.4f), true)
+                } else if (points.size == 1) {
+                    mapView.controller.setCenter(points[0])
+                    mapView.controller.setZoom(15.0)
                 }
             }
         }
@@ -217,7 +242,6 @@ fun MapPlaceholder(
 
                     overlays.add(eventsOverlay)
                     
-                    // Add the destination marker
                     if (onCenterChanged == null) {
                         overlays.add(destinationMarker)
                     }
@@ -234,20 +258,14 @@ fun MapPlaceholder(
                 }
             },
             update = { view ->
-                // Update marker position and text
                 destinationMarker.position = GeoPoint(latitude, longitude)
                 destinationMarker.title = text
                 
+                // Use standard pinpoint marker for delivery
+                destinationMarker.icon = ContextCompat.getDrawable(context, org.osmdroid.library.R.drawable.marker_default)
+                
                 if (useRedMarker) {
-                    val redIcon = context.getDrawable(org.osmdroid.library.R.drawable.marker_default)?.mutate()
-                    redIcon?.colorFilter = PorterDuffColorFilter(android.graphics.Color.RED, PorterDuff.Mode.SRC_IN)
-                    destinationMarker.icon = redIcon
-                } else {
-                    destinationMarker.icon = context.getDrawable(org.osmdroid.library.R.drawable.marker_default)
-                }
-
-                if (snapToUserLocation == 0) {
-                    view.controller.setCenter(GeoPoint(latitude, longitude))
+                    destinationMarker.icon?.mutate()?.colorFilter = PorterDuffColorFilter(android.graphics.Color.RED, PorterDuff.Mode.SRC_IN)
                 }
 
                 if (showUserLocation && !view.overlays.contains(locationOverlay)) {
