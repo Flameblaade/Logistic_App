@@ -2,8 +2,11 @@ package com.example.logistic_app.ui.components
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Paint
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffColorFilter
+import android.graphics.RectF
+import android.graphics.Typeface
 import android.net.Uri
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -35,6 +38,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import coil.compose.rememberAsyncImagePainter
 import com.example.logistic_app.R
 import com.example.logistic_app.ui.theme.*
+import kotlinx.coroutines.delay
 import org.osmdroid.events.MapEventsReceiver
 import org.osmdroid.events.MapListener
 import org.osmdroid.events.ScrollEvent
@@ -70,12 +74,11 @@ fun MapPlaceholder(
     showUserLocation: Boolean = false,
     snapToUserLocation: Int = 0,
     useRedMarker: Boolean = false,
-    dispatcherLat: Double? = null,
-    dispatcherLng: Double? = null,
     onMapClick: (() -> Unit)? = null,
     onMapClickWithPoint: ((GeoPoint) -> Unit)? = null,
     onLongClick: ((GeoPoint) -> Unit)? = null,
-    onCenterChanged: ((GeoPoint) -> Unit)? = null
+    onCenterChanged: ((GeoPoint) -> Unit)? = null,
+    onLocationUpdated: ((Double, Double) -> Unit)? = null // New callback for RTDB tracking
 ) {
     val context = LocalContext.current
     val mapView = remember { MapView(context) }
@@ -100,6 +103,19 @@ fun MapPlaceholder(
                 drawable.draw(canvas)
                 setPersonIcon(bitmap)
                 setDirectionIcon(bitmap)
+            }
+        }
+    }
+
+    // RTDB Location Update Loop
+    LaunchedEffect(showUserLocation) {
+        if (showUserLocation && onLocationUpdated != null) {
+            while (true) {
+                val loc = locationOverlay.myLocation
+                if (loc != null) {
+                    onLocationUpdated(loc.latitude, loc.longitude)
+                }
+                delay(5000) // Update every 5 seconds to balance real-time vs battery/data
             }
         }
     }
@@ -166,7 +182,7 @@ fun MapPlaceholder(
         }
     }
 
-    // Fit ALL points in view initially (Truck and Destination Pinpoint)
+    // Fit ALL points in view initially (Truck, Destination)
     LaunchedEffect(latitude, longitude, showUserLocation) {
         locationOverlay.runOnFirstFix {
             val userLoc = locationOverlay.myLocation
@@ -261,11 +277,69 @@ fun MapPlaceholder(
                 destinationMarker.position = GeoPoint(latitude, longitude)
                 destinationMarker.title = text
                 
-                // Use standard pinpoint marker for delivery
-                destinationMarker.icon = ContextCompat.getDrawable(context, org.osmdroid.library.R.drawable.marker_default)
-                
-                if (useRedMarker) {
-                    destinationMarker.icon?.mutate()?.colorFilter = PorterDuffColorFilter(android.graphics.Color.RED, PorterDuff.Mode.SRC_IN)
+                // Create custom icon with "Drop off" caption if not red marker
+                val baseDrawable = ContextCompat.getDrawable(context, org.osmdroid.library.R.drawable.marker_default)
+                baseDrawable?.let { drawable ->
+                    val markerColor = if (useRedMarker) android.graphics.Color.RED else android.graphics.Color.parseColor("#10B981")
+                    val width = drawable.intrinsicWidth
+                    val height = drawable.intrinsicHeight
+                    
+                    // Larger canvas for bigger, more readable label
+                    val extraHeight = if (!useRedMarker) 70 else 0
+                    val bitmapWidth = if (!useRedMarker) width.coerceAtLeast(160) else width
+                    val bitmap = Bitmap.createBitmap(bitmapWidth, height + extraHeight, Bitmap.Config.ARGB_8888)
+                    val canvas = Canvas(bitmap)
+                    val centerX = (bitmap.width / 2).toFloat()
+                    
+                    if (!useRedMarker) {
+                        val caption = "Drop off"
+                        val textPaint = Paint().apply {
+                            color = android.graphics.Color.WHITE
+                            textSize = 28f // Increased size
+                            isAntiAlias = true
+                            textAlign = Paint.Align.CENTER
+                            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                        }
+                        
+                        val textWidth = textPaint.measureText(caption)
+                        val textHeight = 28f
+                        
+                        // Very user-friendly Pill: Green background, bold white text
+                        val rectPaint = Paint().apply {
+                            color = markerColor
+                            style = Paint.Style.FILL
+                            isAntiAlias = true
+                        }
+                        
+                        // Adding a subtle border for clarity
+                        val borderPaint = Paint().apply {
+                            color = android.graphics.Color.WHITE
+                            style = Paint.Style.STROKE
+                            strokeWidth = 3f
+                            isAntiAlias = true
+                        }
+                        
+                        val rect = RectF(
+                            centerX - (textWidth / 2) - 20,
+                            10f,
+                            centerX + (textWidth / 2) + 20,
+                            textHeight + 30
+                        )
+                        canvas.drawRoundRect(rect, 15f, 15f, rectPaint)
+                        canvas.drawRoundRect(rect, 15f, 15f, borderPaint)
+                        
+                        // Draw text centered in the green pill
+                        canvas.drawText(caption, centerX, textHeight + 20, textPaint)
+                    }
+                    
+                    // Draw the marker icon below the label
+                    drawable.mutate().colorFilter = PorterDuffColorFilter(markerColor, PorterDuff.Mode.SRC_IN)
+                    val markerLeft = (bitmap.width - width) / 2
+                    drawable.setBounds(markerLeft, extraHeight, markerLeft + width, height + extraHeight)
+                    drawable.draw(canvas)
+                    
+                    destinationMarker.icon = android.graphics.drawable.BitmapDrawable(context.resources, bitmap)
+                    destinationMarker.setAnchor(Marker.ANCHOR_CENTER, 1.0f)
                 }
 
                 if (showUserLocation && !view.overlays.contains(locationOverlay)) {

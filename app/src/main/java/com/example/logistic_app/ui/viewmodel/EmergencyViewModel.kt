@@ -3,6 +3,7 @@ package com.example.logistic_app.ui.viewmodel
 import android.net.Uri
 import android.util.Log
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
@@ -38,10 +39,14 @@ class EmergencyViewModel : ViewModel() {
     var error by mutableStateOf<String?>(null)
         private set
 
-    // New location state
-    var selectedLat by mutableStateOf(9.7489) // Default mock
-    var selectedLng by mutableStateOf(118.7471) // Default mock
-    var selectedLabel by mutableStateOf("Detected Location")
+    // Location state - using 0.0 as sentinel to detect if location was ever set
+    var selectedLat by mutableDoubleStateOf(0.0)
+    var selectedLng by mutableDoubleStateOf(0.0)
+    var selectedLabel by mutableStateOf("Detecting Location...")
+    
+    // Live location from map to be used if no manual pin exists
+    private var liveLat by mutableDoubleStateOf(0.0)
+    private var liveLng by mutableDoubleStateOf(0.0)
 
     fun onTypeSelected(type: String) {
         selectedType = type
@@ -56,6 +61,25 @@ class EmergencyViewModel : ViewModel() {
         selectedImageUri = uri
     }
 
+    /**
+     * Updates the "Live" location coming from the GPS loop in the Map component.
+     * This ensures we always have the latest coordinates even if the user hasn't pinned anything.
+     */
+    fun updateLiveLocation(lat: Double, lng: Double) {
+        liveLat = lat
+        liveLng = lng
+        
+        // If the user hasn't manually pinned a location yet, update the selected location automatically
+        if (selectedLat == 0.0) {
+            selectedLat = lat
+            selectedLng = lng
+            selectedLabel = "Auto-Detected Location"
+        }
+    }
+
+    /**
+     * Called when the user manually long-presses or clicks the map to set a specific pinpoint.
+     */
     fun onLocationConfirmed(lat: Double, lng: Double, label: String) {
         selectedLat = lat
         selectedLng = lng
@@ -80,6 +104,13 @@ class EmergencyViewModel : ViewModel() {
                 error = "Photo evidence is required for this emergency type."
                 return
             }
+        }
+
+        // Final safety check: if selectedLat is still 0.0 but we have live data, use live data
+        if (selectedLat == 0.0 && liveLat != 0.0) {
+            selectedLat = liveLat
+            selectedLng = liveLng
+            selectedLabel = "Detected Location"
         }
 
         viewModelScope.launch {
@@ -144,9 +175,9 @@ class EmergencyViewModel : ViewModel() {
         selectedImageUri = null
         error = null
         isLoading = false
-        // Reset location to mock or handle properly in production
-        selectedLat = 9.7489
-        selectedLng = 118.7471
-        selectedLabel = "Detected Location"
+        // Reset to sentinel 0.0 to trigger auto-detection on next open
+        selectedLat = 0.0
+        selectedLng = 0.0
+        selectedLabel = "Detecting Location..."
     }
 }

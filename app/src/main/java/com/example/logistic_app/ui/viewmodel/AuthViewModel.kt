@@ -10,6 +10,7 @@ import com.example.logistic_app.data.model.Personnel
 import com.example.logistic_app.utils.CloudinaryHelper
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
+import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
@@ -22,6 +23,8 @@ import kotlinx.coroutines.tasks.await
 class AuthViewModel : ViewModel() {
     private val auth = FirebaseAuth.getInstance()
     private val db = FirebaseFirestore.getInstance()
+    // Initialize RTDB with your specific regional URL
+    private val rtdb = FirebaseDatabase.getInstance("https://lsu-tracker-default-rtdb.firebaseio.com/")
     private var dispatchListener: ListenerRegistration? = null
 
     private val _user = MutableStateFlow<FirebaseUser?>(auth.currentUser)
@@ -127,6 +130,10 @@ class AuthViewModel : ViewModel() {
             }
     }
 
+    /**
+     * Updates the status of the current dispatch in Firestore.
+     * Real-time location tracking logic in the UI will respond to "Ongoing" status.
+     */
     fun updateDispatchStatus(status: String) {
         val dispatchId = _activeDispatch.value?.id ?: return
         viewModelScope.launch {
@@ -137,6 +144,26 @@ class AuthViewModel : ViewModel() {
             } catch (e: Exception) {
                 _error.value = "Failed to update status: ${e.message}"
             }
+        }
+    }
+
+    /**
+     * Updates the live location of the truck in Firebase Realtime Database.
+     * Web Admin should listen to 'active_locations/{dispatchId}' for updates.
+     */
+    fun updateLiveLocation(lat: Double, lng: Double) {
+        val dispatchId = _activeDispatch.value?.id ?: return
+        val status = _activeDispatch.value?.status ?: return
+        
+        // Only update RTDB if dispatch is actually ongoing or reported
+        if (status == "Ongoing" || status == "Reported") {
+            val locationData = mapOf(
+                "lat" to lat,
+                "lng" to lng,
+                "lastUpdated" to System.currentTimeMillis()
+            )
+            rtdb.getReference("active_locations").child(dispatchId)
+                .setValue(locationData)
         }
     }
 
@@ -163,9 +190,13 @@ class AuthViewModel : ViewModel() {
                     "proofOfDelivery" to imageUrl
                 )
 
+                // Update Firestore status
                 db.collection("dispatches").document(dispatchId)
                     .update(updates as Map<String, Any>)
                     .await()
+                
+                // Remove live location from RTDB since delivery is complete
+                rtdb.getReference("active_locations").child(dispatchId).removeValue()
                 
                 _activeDispatch.value = null
                 onSuccess()

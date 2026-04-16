@@ -61,9 +61,7 @@ fun MapFullScreen(
             longitude = if (isPicking) pickedLocation.longitude else (activeDispatch?.location?.lng ?: defaultLng),
             showUserLocation = true,
             snapToUserLocation = snapTrigger,
-            useRedMarker = !isPicking,
-            dispatcherLat = if (!isPicking) 14.5888 else null, // Example static Lat for Dispatcher
-            dispatcherLng = if (!isPicking) 121.0567 else null, // Example static Lng for Dispatcher
+            useRedMarker = false, // Drop-off is always green. Emergency picking uses a separate UI overlay.
             onMapClick = null,
             onCenterChanged = if (isPicking) { newCenter ->
                 pickedLocation = newCenter
@@ -105,7 +103,7 @@ fun MapFullScreen(
         }
 
         if (isPicking) {
-            // Fixed Pinpoint in Center
+            // Fixed Pinpoint in Center for Emergency
             Box(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center

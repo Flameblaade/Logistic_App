@@ -161,6 +161,7 @@ fun DispatchScreen(
         } else {
             ActiveDispatchContent(
                 dispatch = activeDispatch!!,
+                authViewModel = authViewModel,
                 onConfirmDelivery = onConfirmDelivery,
                 onStopOver = onStopOver,
                 onReportDelay = onReportDelay,
@@ -272,6 +273,7 @@ fun ModernInfoRow(label: String, value: String) {
 @Composable
 fun ColumnScope.ActiveDispatchContent(
     dispatch: Dispatch,
+    authViewModel: AuthViewModel,
     onConfirmDelivery: () -> Unit,
     onStopOver: () -> Unit,
     onReportDelay: () -> Unit,
@@ -397,8 +399,9 @@ fun ColumnScope.ActiveDispatchContent(
         showUserLocation = hasLocationPermission,
         snapToUserLocation = snapTrigger,
         onMapClick = onExpandMap,
-        dispatcherLat = 14.5888, // Dispatcher Location
-        dispatcherLng = 121.0567
+        onLocationUpdated = { lat, lng ->
+            authViewModel.updateLiveLocation(lat, lng)
+        }
     )
 }
 

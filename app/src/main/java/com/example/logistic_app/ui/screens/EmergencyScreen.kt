@@ -153,7 +153,10 @@ fun EmergencyScreen(
                             onExpandMap = onExpandMap,
                             selectedLat = emergencyViewModel.selectedLat,
                             selectedLng = emergencyViewModel.selectedLng,
-                            selectedLabel = emergencyViewModel.selectedLabel
+                            selectedLabel = emergencyViewModel.selectedLabel,
+                            onLocationDetected = { lat, lng -> 
+                                emergencyViewModel.updateLiveLocation(lat, lng)
+                            }
                         )
                     }
                     EmergencyStep.SUCCESS -> {
@@ -296,7 +299,8 @@ fun EmergencyDetails(
     onExpandMap: () -> Unit,
     selectedLat: Double,
     selectedLng: Double,
-    selectedLabel: String
+    selectedLabel: String,
+    onLocationDetected: (Double, Double) -> Unit
 ) {
     val isTic = type == "T.I.C."
     var snapTrigger by remember { mutableIntStateOf(1) } // Initial snap on open
@@ -349,12 +353,13 @@ fun EmergencyDetails(
                 MapPlaceholder(
                     modifier = Modifier.height(120.dp), 
                     text = selectedLabel,
-                    latitude = selectedLat,
-                    longitude = selectedLng,
+                    latitude = if (selectedLat == 0.0) 14.5995 else selectedLat,
+                    longitude = if (selectedLng == 0.0) 120.9842 else selectedLng,
                     showUserLocation = true,
                     snapToUserLocation = snapTrigger,
                     useRedMarker = true,
-                    onMapClick = onExpandMap
+                    onMapClick = onExpandMap,
+                    onLocationUpdated = onLocationDetected
                 )
                 Text(
                     "Note: To choose a different pinpoint, open the map and long-press on your target location.",
